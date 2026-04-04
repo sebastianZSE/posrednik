@@ -1,0 +1,31 @@
+[
+  {
+    "title": "Elektro Bernhard Website Test 001",
+    "phone": "+49 89 777333",
+    "email": "",
+    "website": "https://www.elektro-bernhard.de/",
+    "address": "Teststrasse 10",
+    "city": "Munich",
+    "postalCode": "80331",
+    "countryCode": "DE",
+    "categoryName": "Elektroinstallation",
+    "url": "https://maps.google.com/elektro-bernhard-website-test-001",
+    "placeId": "elektro-bernhard-website-test-001"
+  },
+  
+  {
+    "title": "AN Elektrotechnik Website Test 001",
+    "phone": "040 555 040 34",
+    "email": "",
+    "website": "https://www.anelektrotechnik.de/",
+    "address": "Kurt-A.-Koerber-Chaussee 41",
+    "city": "Hamburg",
+    "postalCode": "21033",
+    "countryCode": "DE",
+    "categoryName": "Elektroinstallation",
+    "url": "https://maps.google.com/an-elektrotechnik-website-test-001",
+    "placeId": "an-elektrotechnik-website-test-001"
+  }
+
+  
+]

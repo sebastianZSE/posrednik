@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-04-04T18:59:14.684Z",
+  "counts": {
+    "allCompanies": 6,
+    "readyCompanies": 4,
+    "enrichCompanies": 1,
+    "skipCompanies": 1,
+    "allContacts": 10
+  },
+  "latestBatch": {
+    "id": "95ff9eae-6d80-4ad7-b77f-9fa5d55b1bf8",
+    "sourceName": "apify_json",
+    "sourceFileName": "apify.json",
+    "batchStatus": "skipped_duplicate_file",
+    "rowsTotal": 2,
+    "rowsMapped": 0,
+    "rowsInserted": 0,
+    "rowsDuplicates": 2,
+    "rowsErrors": 0,
+    "startedAt": "2026-04-04T18:59:11.572563+00:00",
+    "finishedAt": "2026-04-04T18:59:11.42+00:00",
+    "notes": "Plik byl juz zaimportowany w batchu 2c0247c4-5ac8-43a6-bc09-238d76ae54e5"
+  },
+  "files": {
+    "readyCompaniesCsv": "exports/readyCompanies.csv",
+    "enrichCompaniesCsv": "exports/enrichCompanies.csv",
+    "pipelineSummaryJson": "exports/pipelineSummary.json"
+  }
+}

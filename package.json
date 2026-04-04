@@ -6,12 +6,23 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import:apify": "tsx scripts/importApifyJson.ts",
+    "promote:imports": "tsx scripts/promoteImports.ts",
+    "import:enrichResults": "tsx scripts/importEnrichResults.ts",
+    "pipeline:apify": "tsx scripts/runFullPipeline.ts",
+    "enrich:deWebsites": "tsx scripts/enrichDeWebsites.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.101.1",
+    "cheerio": "^1.2.0",
+    "csv-parse": "^6.2.1",
+    "dotenv": "^17.4.0",
+    "libphonenumber-js": "^1.12.41",
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -19,6 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

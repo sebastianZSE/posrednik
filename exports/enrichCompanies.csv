@@ -1,0 +1,2 @@
+"companyId","companyName","legalName","domain","website","city","country","category","status","qualityScore","hasPhone","hasEmail","needsPhone","needsEmail","enrichAction","primaryPhone","allPhones","primaryEmail","allEmails","contactsCount","createdAt"
+"ea1e01f1-45e1-4efa-97bc-749fdd4d7af4","Enrich Elektro GmbH","Enrich Elektro GmbH","enrich-elektro.de","https://enrich-elektro.de","Munich","DE","Elektroinstallation","enrich","6","yes","no","no","yes","findEmail","+49 89 777333","+49 89 777333","","","1","2026-04-04T13:27:42.448283+00:00"
