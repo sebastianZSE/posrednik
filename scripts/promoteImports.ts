@@ -1,54 +1,14 @@
-// jak działa ten skrypt
-// Po kolei:
-// 1
-// Pobiera rekordy z imports_raw, które mają:
-// promotion_status = new
-// Czyli bierze tylko te surowe rekordy, które jeszcze nie były obrabiane.
-// 2
-// Dla każdego rekordu:
-// czyści nazwę firmy,
-// wyciąga domenę ze strony,
-// normalizuje email,
-// normalizuje telefon.
-// 3
-// Sprawdza, czy firma już istnieje:
-// najpierw po domain,
-// jeśli nie ma domeny, to po normalized_name + city + country.
-// To jest celowo proste i bezpieczne.
-// 4
-// Jeśli firmy nie ma:
-// tworzy nowy rekord w companies.
-// Jeśli firma już jest:
-// uzupełnia jej brakujące pola.
-// 5
-// Dodaje kontakty do company_contacts:
-// email
-// phone
-// Jeśli kontakt już istnieje, nie dodaje go drugi raz.
-// 6
-// Na końcu oznacza rekord w imports_raw jako:
-// promoted
-//  albo
-// error
-
-import { config } from "dotenv";
-config({ path: ".env.local" });
-
-import { createClient } from "@supabase/supabase-js";
-import { parsePhoneNumberFromString } from "libphonenumber-js";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl) {
-  throw new Error("Brakuje NEXT_PUBLIC_SUPABASE_URL w .env.local");
-}
-
-if (!serviceRoleKey) {
-  throw new Error("Brakuje SUPABASE_SERVICE_ROLE_KEY w .env.local");
-}
-
-const supabase = createClient(supabaseUrl, serviceRoleKey);
+import { supabaseAdmin as supabase } from "../src/lib/core/supabaseAdmin";
+import {
+  normalizeEmail,
+  normalizePhone,
+} from "../src/lib/core/contactNormalization";
+import {
+  calculateLeadStatus,
+  calculateQualityScore,
+  refreshCompanyStatusAndQuality,
+} from "../src/lib/core/companyStatus";
+import { addContactIfMissing } from "../src/lib/core/contactStore";
 
 type ImportRow = {
   id: string;
@@ -77,17 +37,6 @@ type CompanyRow = {
   postal_code: string | null;
   country: string | null;
   category: string | null;
-};
-
-type CompanyBaseRow = {
-  id: string;
-  domain: string | null;
-  address: string | null;
-  city: string | null;
-};
-
-type CompanyContactRow = {
-  contact_type: "phone" | "email";
 };
 
 function normalizeText(value: string | null): string | null {
@@ -136,70 +85,6 @@ function normalizeDomain(website: string | null): string | null {
   } catch {
     return null;
   }
-}
-
-function normalizeEmail(email: string | null): string | null {
-  if (!email) return null;
-
-  const normalized = email.trim().toLowerCase();
-
-  if (!normalized.includes("@")) return null;
-
-  return normalized;
-}
-
-function normalizePhone(
-  phone: string | null,
-  country: string | null,
-): string | null {
-  if (!phone) return null;
-
-  const countryCode =
-    country && typeof country === "string"
-      ? country.trim().toUpperCase()
-      : undefined;
-
-  try {
-    const parsed = parsePhoneNumberFromString(
-      phone,
-      countryCode as "DE" | "AT" | "CH" | undefined,
-    );
-
-    if (parsed?.isValid()) {
-      return parsed.number;
-    }
-  } catch {}
-
-  const fallback = phone
-    .trim()
-    .replace(/[^\d+]/g, "")
-    .replace(/^00/, "+");
-
-  return fallback || null;
-}
-
-function calculateLeadStatus(params: { hasEmail: boolean; hasPhone: boolean }) {
-  if (params.hasEmail && params.hasPhone) return "ready";
-  if (params.hasEmail || params.hasPhone) return "enrich";
-  return "skip";
-}
-
-function calculateQualityScore(params: {
-  domain: string | null;
-  address: string | null;
-  city: string | null;
-  hasEmail: boolean;
-  hasPhone: boolean;
-}) {
-  let score = 0;
-
-  if (params.domain) score += 2;
-  if (params.hasEmail) score += 2;
-  if (params.hasPhone) score += 2;
-  if (params.address) score += 1;
-  if (params.city) score += 1;
-
-  return score;
 }
 
 async function findExistingCompany(params: {
@@ -377,121 +262,6 @@ async function createCompany(params: {
   return data as CompanyRow;
 }
 
-async function addContact(params: {
-  companyId: string;
-  contactType: "phone" | "email";
-  contactValue: string | null;
-  normalizedValue: string | null;
-  source: string | null;
-}) {
-  if (!params.contactValue || !params.normalizedValue) {
-    return;
-  }
-
-  const { data: existingContact, error: findError } = await supabase
-    .from("company_contacts")
-    .select("id")
-    .eq("company_id", params.companyId)
-    .eq("contact_type", params.contactType)
-    .eq("normalized_value", params.normalizedValue)
-    .limit(1);
-
-  if (findError) {
-    throw new Error(`Blad przy szukaniu kontaktu: ${findError.message}`);
-  }
-
-  if (existingContact && existingContact.length > 0) {
-    return;
-  }
-
-  const { count, error: countError } = await supabase
-    .from("company_contacts")
-    .select("*", { count: "exact", head: true })
-    .eq("company_id", params.companyId)
-    .eq("contact_type", params.contactType);
-
-  if (countError) {
-    throw new Error(`Blad przy liczeniu kontaktow: ${countError.message}`);
-  }
-
-  const isPrimary = (count ?? 0) === 0;
-
-  const { error: insertError } = await supabase
-    .from("company_contacts")
-    .insert({
-      company_id: params.companyId,
-      contact_type: params.contactType,
-      contact_value: params.contactValue,
-      normalized_value: params.normalizedValue,
-      is_primary: isPrimary,
-      is_verified: false,
-      source: params.source ?? "promoteImports",
-    });
-
-  if (insertError) {
-    throw new Error(`Blad przy dodawaniu kontaktu: ${insertError.message}`);
-  }
-}
-
-async function refreshCompanyStatusAndQuality(companyId: string) {
-  const { data: companyData, error: companyError } = await supabase
-    .from("companies")
-    .select("id, domain, address, city")
-    .eq("id", companyId)
-    .single();
-
-  if (companyError) {
-    throw new Error(
-      `Blad przy pobieraniu firmy do refresh: ${companyError.message}`,
-    );
-  }
-
-  const { data: contactsData, error: contactsError } = await supabase
-    .from("company_contacts")
-    .select("contact_type")
-    .eq("company_id", companyId);
-
-  if (contactsError) {
-    throw new Error(
-      `Blad przy pobieraniu kontaktow do refresh: ${contactsError.message}`,
-    );
-  }
-
-  const company = companyData as CompanyBaseRow;
-  const contacts = (contactsData ?? []) as CompanyContactRow[];
-
-  const hasEmail = contacts.some((contact) => contact.contact_type === "email");
-  const hasPhone = contacts.some((contact) => contact.contact_type === "phone");
-
-  const status = calculateLeadStatus({
-    hasEmail,
-    hasPhone,
-  });
-
-  const qualityScore = calculateQualityScore({
-    domain: company.domain,
-    address: company.address,
-    city: company.city,
-    hasEmail,
-    hasPhone,
-  });
-
-  const { error: updateError } = await supabase
-    .from("companies")
-    .update({
-      status,
-      quality_score: qualityScore,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", companyId);
-
-  if (updateError) {
-    throw new Error(
-      `Blad przy refresh status i qualityScore: ${updateError.message}`,
-    );
-  }
-}
-
 async function markImportAsPromoted(params: {
   importId: string;
   companyId: string;
@@ -609,21 +379,27 @@ async function main() {
         });
       }
 
-      await addContact({
-        companyId: company.id,
-        contactType: "email",
-        contactValue: row.email,
-        normalizedValue: normalizedEmail,
-        source: row.source,
-      });
+      const contactSource = row.source?.trim() || "promoteImports";
 
-      await addContact({
-        companyId: company.id,
-        contactType: "phone",
-        contactValue: row.phone,
-        normalizedValue: normalizedPhone,
-        source: row.source,
-      });
+      if (row.email && normalizedEmail) {
+        await addContactIfMissing({
+          companyId: company.id,
+          contactType: "email",
+          contactValue: row.email,
+          normalizedValue: normalizedEmail,
+          source: contactSource,
+        });
+      }
+
+      if (row.phone && normalizedPhone) {
+        await addContactIfMissing({
+          companyId: company.id,
+          contactType: "phone",
+          contactValue: row.phone,
+          normalizedValue: normalizedPhone,
+          source: contactSource,
+        });
+      }
 
       await refreshCompanyStatusAndQuality(company.id);
 
