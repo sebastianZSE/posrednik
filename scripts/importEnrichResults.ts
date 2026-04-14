@@ -1,18 +1,22 @@
-//importujemy pliki z zewnętrznego źródła (np. z Apify) do naszej bazy danych Supabase, aktualizując istniejące rekordy firm o nowe kontakty (email, telefon) i odświeżając ich status i quality_score zgodnie z logiką biznesową. Skrypt czyta dane z pliku CSV,
-// normalizuje je, sprawdza istnienie firmy w bazie, dodaje brakujące kontakty i aktualizuje status firmy.
-// Na koniec wypisuje statystyki importu.
+// importujemy pliki z zewnętrznego źródła (np. z Apify) do naszej bazy danych Supabase,
+// aktualizując istniejące rekordy firm o nowe kontakty (email, telefon)
+// i odświeżając ich status i quality_score zgodnie z logiką biznesową.
 
-import fs from "node:fs/promises";
-import path from "node:path";
-import { parse } from "csv-parse/sync";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { parse } from 'csv-parse/sync';
 
-import { supabaseAdmin as supabase } from "../src/lib/core/supabaseAdmin";
+import { supabaseAdmin as supabase } from '../src/lib/core/supabaseAdmin';
 import {
   normalizeEmail,
   normalizePhone,
-} from "../src/lib/core/contactNormalization";
-import { refreshCompanyStatusAndQuality } from "../src/lib/core/companyStatus";
-import { addContactIfMissing } from "../src/lib/core/contactStore";
+} from '../src/lib/core/contactNormalization';
+import { refreshCompanyStatusAndQuality } from '../src/lib/core/companyStatus';
+import {
+  validateNormalizedEmailContact,
+  validatePhoneContact,
+} from '../src/lib/core/contactValidation';
+import { addContactIfMissing } from '../src/lib/core/contactStore';
 
 type CsvRow = {
   companyId?: string;
@@ -24,11 +28,11 @@ type CsvRow = {
   foundPhone?: string;
 };
 
-async function ensureCompanyExists(companyId: string) {
+async function getCompanyForContactValidation(companyId: string) {
   const { data, error } = await supabase
-    .from("companies")
-    .select("id")
-    .eq("id", companyId)
+    .from('companies')
+    .select('id, domain, country')
+    .eq('id', companyId)
     .single();
 
   if (error) {
@@ -39,12 +43,16 @@ async function ensureCompanyExists(companyId: string) {
     throw new Error(`Nie znaleziono firmy ${companyId}`);
   }
 
-  return data;
+  return data as {
+    id: string;
+    domain: string | null;
+    country: string | null;
+  };
 }
 
 async function main() {
-  const filePath = path.join(process.cwd(), "data", "enrichResults.csv");
-  const fileContent = await fs.readFile(filePath, "utf8");
+  const filePath = path.join(process.cwd(), 'data', 'enrichResults.csv');
+  const fileContent = await fs.readFile(filePath, 'utf8');
 
   const parsed = parse(fileContent, {
     columns: true,
@@ -55,7 +63,7 @@ async function main() {
   console.log(`Wczytano rekordow enrich: ${parsed.length}`);
 
   if (parsed.length === 0) {
-    console.log("Brak rekordow do importu.");
+    console.log('Brak rekordow do importu.');
     return;
   }
 
@@ -70,14 +78,17 @@ async function main() {
       const companyId = row.companyId?.trim();
 
       if (!companyId) {
-        throw new Error("Brak companyId");
+        throw new Error('Brak companyId');
       }
 
-      await ensureCompanyExists(companyId);
+      const company = await getCompanyForContactValidation(companyId);
 
       const email = normalizeEmail(row.email ?? row.foundEmail);
-      const phone = normalizePhone(row.phone ?? row.foundPhone, row.country);
-      const source = row.source?.trim() || "enrichImport";
+      const phone = normalizePhone(
+        row.phone ?? row.foundPhone,
+        row.country ?? company.country
+      );
+      const source = row.source?.trim() || 'enrichImport';
 
       if (!email && !phone) {
         skippedCount += 1;
@@ -85,13 +96,35 @@ async function main() {
         continue;
       }
 
-      if (email) {
+      const emailValidation = email
+        ? validateNormalizedEmailContact({
+            normalizedEmail: email,
+            companyDomain: company.domain,
+          })
+        : null;
+
+      const phoneValidation = phone
+        ? validatePhoneContact({
+            rawPhone: row.phone ?? row.foundPhone,
+            normalizedPhone: phone,
+            companyCountry: row.country ?? company.country,
+          })
+        : null;
+
+      if (email && emailValidation) {
         const insertedEmail = await addContactIfMissing({
           companyId,
-          contactType: "email",
-          contactValue: email,
+          contactType: 'email',
+          contactValue: row.email ?? row.foundEmail ?? email,
           normalizedValue: email,
           source,
+          validationStatus: emailValidation.validationStatus,
+          validationCheckedAt: emailValidation.validationCheckedAt,
+          validationVersion: emailValidation.validationVersion,
+          emailKind: emailValidation.emailKind,
+          emailSameDomainAsCompany: emailValidation.emailSameDomainAsCompany,
+          phoneE164: emailValidation.phoneE164,
+          phoneCountryCode: emailValidation.phoneCountryCode,
         });
 
         if (insertedEmail) {
@@ -99,13 +132,20 @@ async function main() {
         }
       }
 
-      if (phone) {
+      if (phone && phoneValidation) {
         const insertedPhone = await addContactIfMissing({
           companyId,
-          contactType: "phone",
+          contactType: 'phone',
           contactValue: row.phone ?? row.foundPhone ?? phone,
           normalizedValue: phone,
           source,
+          validationStatus: phoneValidation.validationStatus,
+          validationCheckedAt: phoneValidation.validationCheckedAt,
+          validationVersion: phoneValidation.validationVersion,
+          emailKind: phoneValidation.emailKind,
+          emailSameDomainAsCompany: phoneValidation.emailSameDomainAsCompany,
+          phoneE164: phoneValidation.phoneE164,
+          phoneCountryCode: phoneValidation.phoneCountryCode,
         });
 
         if (insertedPhone) {
@@ -121,15 +161,15 @@ async function main() {
       errorCount += 1;
 
       const errorMessage =
-        error instanceof Error ? error.message : "Nieznany blad";
+        error instanceof Error ? error.message : 'Nieznany blad';
 
       console.error(
-        `[ERR] ${row.companyId ?? "brakCompanyId"}: ${errorMessage}`,
+        `[ERR] ${row.companyId ?? 'brakCompanyId'}: ${errorMessage}`
       );
     }
   }
 
-  console.log("Import enrich zakonczony.");
+  console.log('Import enrich zakonczony.');
   console.log(`processedCount=${processedCount}`);
   console.log(`skippedCount=${skippedCount}`);
   console.log(`errorCount=${errorCount}`);
@@ -138,7 +178,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("Skrypt importEnrichResults nie udal sie:");
+  console.error('Skrypt importEnrichResults nie udal sie:');
   console.error(error);
   process.exit(1);
 });
