@@ -1,14 +1,18 @@
-import { supabaseAdmin as supabase } from "../src/lib/core/supabaseAdmin";
+import { supabaseAdmin as supabase } from '../src/lib/core/supabaseAdmin';
 import {
   normalizeEmail,
   normalizePhone,
-} from "../src/lib/core/contactNormalization";
+} from '../src/lib/core/contactNormalization';
 import {
   calculateLeadStatus,
   calculateQualityScore,
   refreshCompanyStatusAndQuality,
-} from "../src/lib/core/companyStatus";
-import { addContactIfMissing } from "../src/lib/core/contactStore";
+} from '../src/lib/core/companyStatus';
+import {
+  validateNormalizedEmailContact,
+  validatePhoneContact,
+} from '../src/lib/core/contactValidation';
+import { addContactIfMissing } from '../src/lib/core/contactStore';
 
 type ImportRow = {
   id: string;
@@ -45,10 +49,10 @@ function normalizeText(value: string | null): string | null {
   const normalized = value
     .trim()
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
   return normalized || null;
@@ -60,8 +64,8 @@ function normalizeCompanyName(companyName: string | null): string | null {
   if (!normalized) return null;
 
   const cleaned = normalized
-    .replace(/\b(gmbh|mbh|ug|ag|kg|ohg|gbr|e k|ek|e u|eu|sarl|sa)\b/gu, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\b(gmbh|mbh|ug|ag|kg|ohg|gbr|e k|ek|e u|eu|sarl|sa)\b/gu, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 
   return cleaned || null;
@@ -71,13 +75,13 @@ function normalizeDomain(website: string | null): string | null {
   if (!website) return null;
 
   try {
-    const withProtocol = website.startsWith("http")
+    const withProtocol = website.startsWith('http')
       ? website
       : `https://${website}`;
 
     const url = new URL(withProtocol);
     const hostname = url.hostname
-      .replace(/^www\./, "")
+      .replace(/^www\./, '')
       .trim()
       .toLowerCase();
 
@@ -96,11 +100,11 @@ async function findExistingCompany(params: {
 }) {
   if (params.domain) {
     const { data, error } = await supabase
-      .from("companies")
+      .from('companies')
       .select(
-        "id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category",
+        'id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category'
       )
-      .eq("domain", params.domain)
+      .eq('domain', params.domain)
       .limit(1);
 
     if (error) {
@@ -114,15 +118,15 @@ async function findExistingCompany(params: {
 
   if (params.normalizedPhone) {
     const { data: contactData, error: contactError } = await supabase
-      .from("company_contacts")
-      .select("company_id")
-      .eq("contact_type", "phone")
-      .eq("normalized_value", params.normalizedPhone)
+      .from('company_contacts')
+      .select('company_id')
+      .eq('contact_type', 'phone')
+      .eq('normalized_value', params.normalizedPhone)
       .limit(1);
 
     if (contactError) {
       throw new Error(
-        `Blad przy szukaniu firmy po telefonie: ${contactError.message}`,
+        `Blad przy szukaniu firmy po telefonie: ${contactError.message}`
       );
     }
 
@@ -130,16 +134,16 @@ async function findExistingCompany(params: {
       const companyId = contactData[0].company_id;
 
       const { data: companyData, error: companyError } = await supabase
-        .from("companies")
+        .from('companies')
         .select(
-          "id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category",
+          'id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category'
         )
-        .eq("id", companyId)
+        .eq('id', companyId)
         .limit(1);
 
       if (companyError) {
         throw new Error(
-          `Blad przy pobieraniu firmy po telefonie: ${companyError.message}`,
+          `Blad przy pobieraniu firmy po telefonie: ${companyError.message}`
         );
       }
 
@@ -151,18 +155,18 @@ async function findExistingCompany(params: {
 
   if (params.normalizedName && params.city && params.country) {
     const { data, error } = await supabase
-      .from("companies")
+      .from('companies')
       .select(
-        "id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category",
+        'id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category'
       )
-      .eq("normalized_name", params.normalizedName)
-      .eq("city", params.city)
-      .eq("country", params.country)
+      .eq('normalized_name', params.normalizedName)
+      .eq('city', params.city)
+      .eq('country', params.country)
       .limit(1);
 
     if (error) {
       throw new Error(
-        `Blad przy szukaniu firmy po nazwie i miescie: ${error.message}`,
+        `Blad przy szukaniu firmy po nazwie i miescie: ${error.message}`
       );
     }
 
@@ -199,9 +203,9 @@ async function updateExistingCompany(params: {
   patch.updated_at = new Date().toISOString();
 
   const { error } = await supabase
-    .from("companies")
+    .from('companies')
     .update(patch)
-    .eq("id", params.company.id);
+    .eq('id', params.company.id);
 
   if (error) {
     throw new Error(`Blad przy aktualizacji firmy: ${error.message}`);
@@ -235,7 +239,7 @@ async function createCompany(params: {
   });
 
   const { data, error } = await supabase
-    .from("companies")
+    .from('companies')
     .insert({
       company_name: params.companyName,
       normalized_name: params.normalizedName,
@@ -251,7 +255,7 @@ async function createCompany(params: {
       quality_score: qualityScore,
     })
     .select(
-      "id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category",
+      'id, company_name, normalized_name, legal_name, website, domain, address, city, postal_code, country, category'
     )
     .single();
 
@@ -267,18 +271,18 @@ async function markImportAsPromoted(params: {
   companyId: string;
 }) {
   const { error } = await supabase
-    .from("imports_raw")
+    .from('imports_raw')
     .update({
-      promotion_status: "promoted",
+      promotion_status: 'promoted',
       promoted_at: new Date().toISOString(),
       promotion_error: null,
       company_id: params.companyId,
     })
-    .eq("id", params.importId);
+    .eq('id', params.importId);
 
   if (error) {
     throw new Error(
-      `Blad przy oznaczaniu importu jako promoted: ${error.message}`,
+      `Blad przy oznaczaniu importu jako promoted: ${error.message}`
     );
   }
 }
@@ -288,28 +292,28 @@ async function markImportAsError(params: {
   errorMessage: string;
 }) {
   const { error } = await supabase
-    .from("imports_raw")
+    .from('imports_raw')
     .update({
-      promotion_status: "error",
+      promotion_status: 'error',
       promotion_error: params.errorMessage,
     })
-    .eq("id", params.importId);
+    .eq('id', params.importId);
 
   if (error) {
     throw new Error(
-      `Blad przy oznaczaniu importu jako error: ${error.message}`,
+      `Blad przy oznaczaniu importu jako error: ${error.message}`
     );
   }
 }
 
 async function main() {
   const { data, error } = await supabase
-    .from("imports_raw")
+    .from('imports_raw')
     .select(
-      "id, company_name, website, email, phone, address, city, postal_code, country, category, source, promotion_status",
+      'id, company_name, website, email, phone, address, city, postal_code, country, category, source, promotion_status'
     )
-    .eq("promotion_status", "new")
-    .order("imported_at", { ascending: true })
+    .eq('promotion_status', 'new')
+    .order('imported_at', { ascending: true })
     .limit(200);
 
   if (error) {
@@ -321,7 +325,7 @@ async function main() {
   console.log(`Znaleziono rekordow do przeniesienia: ${rows.length}`);
 
   if (rows.length === 0) {
-    console.log("Brak rekordow do przeniesienia.");
+    console.log('Brak rekordow do przeniesienia.');
     return;
   }
 
@@ -331,13 +335,13 @@ async function main() {
   for (const row of rows) {
     try {
       if (!row.company_name) {
-        throw new Error("Brak company_name");
+        throw new Error('Brak company_name');
       }
 
       const normalizedName = normalizeCompanyName(row.company_name);
 
       if (!normalizedName) {
-        throw new Error("Nie udalo sie znormalizowac nazwy firmy");
+        throw new Error('Nie udalo sie znormalizowac nazwy firmy');
       }
 
       const domain = normalizeDomain(row.website);
@@ -379,25 +383,56 @@ async function main() {
         });
       }
 
-      const contactSource = row.source?.trim() || "promoteImports";
+      const contactSource = row.source?.trim() || 'promoteImports';
+      const companyDomainForValidation = company.domain ?? domain;
+      const companyCountryForValidation = company.country ?? row.country;
 
-      if (row.email && normalizedEmail) {
+      const emailValidation = normalizedEmail
+        ? validateNormalizedEmailContact({
+            normalizedEmail,
+            companyDomain: companyDomainForValidation,
+          })
+        : null;
+
+      const phoneValidation = normalizedPhone
+        ? validatePhoneContact({
+            rawPhone: row.phone,
+            normalizedPhone,
+            companyCountry: companyCountryForValidation,
+          })
+        : null;
+
+      if (row.email && normalizedEmail && emailValidation) {
         await addContactIfMissing({
           companyId: company.id,
-          contactType: "email",
+          contactType: 'email',
           contactValue: row.email,
           normalizedValue: normalizedEmail,
           source: contactSource,
+          validationStatus: emailValidation.validationStatus,
+          validationCheckedAt: emailValidation.validationCheckedAt,
+          validationVersion: emailValidation.validationVersion,
+          emailKind: emailValidation.emailKind,
+          emailSameDomainAsCompany: emailValidation.emailSameDomainAsCompany,
+          phoneE164: emailValidation.phoneE164,
+          phoneCountryCode: emailValidation.phoneCountryCode,
         });
       }
 
-      if (row.phone && normalizedPhone) {
+      if (row.phone && normalizedPhone && phoneValidation) {
         await addContactIfMissing({
           companyId: company.id,
-          contactType: "phone",
+          contactType: 'phone',
           contactValue: row.phone,
           normalizedValue: normalizedPhone,
           source: contactSource,
+          validationStatus: phoneValidation.validationStatus,
+          validationCheckedAt: phoneValidation.validationCheckedAt,
+          validationVersion: phoneValidation.validationVersion,
+          emailKind: phoneValidation.emailKind,
+          emailSameDomainAsCompany: phoneValidation.emailSameDomainAsCompany,
+          phoneE164: phoneValidation.phoneE164,
+          phoneCountryCode: phoneValidation.phoneCountryCode,
         });
       }
 
@@ -412,7 +447,7 @@ async function main() {
       console.log(`[OK] ${row.company_name}`);
     } catch (error) {
       const errorMessage =
-        error instanceof Error ? error.message : "Nieznany blad";
+        error instanceof Error ? error.message : 'Nieznany blad';
 
       errorCount += 1;
 
@@ -426,12 +461,12 @@ async function main() {
   }
 
   console.log(
-    `Gotowe. promotedCount=${promotedCount}, errorCount=${errorCount}`,
+    `Gotowe. promotedCount=${promotedCount}, errorCount=${errorCount}`
   );
 }
 
 main().catch((error) => {
-  console.error("Skrypt promoteImports nie udal sie:");
+  console.error('Skrypt promoteImports nie udal sie:');
   console.error(error);
   process.exit(1);
 });
