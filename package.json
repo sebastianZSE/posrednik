@@ -12,7 +12,8 @@
     "import:enrichResults": "tsx scripts/importEnrichResults.ts",
     "pipeline:apify": "tsx scripts/runFullPipeline.ts",
     "enrich:deWebsites": "tsx scripts/enrichDeWebsites.ts",
-    "backfill:contactValidation": "tsx scripts/backfillContactValidation.ts"
+    "backfill:contactValidation": "tsx scripts/backfillContactValidation.ts",
+    "refresh:companyStatuses": "tsx scripts/refreshCompanyStatuses.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
