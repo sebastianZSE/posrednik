@@ -163,6 +163,27 @@ function buildOutreachExportHref(params: {
   return queryString ? `/exportOutreach?${queryString}` : "/exportOutreach";
 }
 
+function buildBrevoPrimaryExportHref(params: {
+  search?: string;
+  country?: string;
+}) {
+  const urlSearchParams = new URLSearchParams();
+
+  if (params.search) {
+    urlSearchParams.set("search", params.search);
+  }
+
+  if (params.country) {
+    urlSearchParams.set("country", params.country);
+  }
+
+  const queryString = urlSearchParams.toString();
+
+  return queryString
+    ? `/exportBrevoPrimary?${queryString}`
+    : "/exportBrevoPrimary";
+}
+
 function getEffectiveStatus(params: { view: string; status: string }) {
   if (params.status) {
     return params.status;
@@ -323,6 +344,23 @@ export default async function CompaniesPage({
             }}
           >
             ExportOutreach
+          </Link>
+
+          <Link
+            href={buildBrevoPrimaryExportHref({
+              search,
+              country,
+            })}
+            style={{
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
+              textDecoration: "none",
+              color: "inherit",
+              display: "inline-block",
+            }}
+          >
+            ExportBrevoPrimary
           </Link>
 
           <Link
