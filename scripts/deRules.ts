@@ -10,6 +10,7 @@ export const deRules = {
   source: "deWebsiteExtractor",
   targetStatus: "enrich",
   maxCompaniesPerRun: 25,
+  maxWebsiteEnrichAttempts: 3,
   maxPagesPerCompany: 5,
   requestTimeoutMs: 10000,
   userAgent:

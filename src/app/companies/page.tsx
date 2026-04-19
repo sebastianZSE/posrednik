@@ -144,6 +144,25 @@ function buildExportHref(params: {
   return queryString ? `/exportCompanies?${queryString}` : "/exportCompanies";
 }
 
+function buildOutreachExportHref(params: {
+  search?: string;
+  country?: string;
+}) {
+  const urlSearchParams = new URLSearchParams();
+
+  if (params.search) {
+    urlSearchParams.set("search", params.search);
+  }
+
+  if (params.country) {
+    urlSearchParams.set("country", params.country);
+  }
+
+  const queryString = urlSearchParams.toString();
+
+  return queryString ? `/exportOutreach?${queryString}` : "/exportOutreach";
+}
+
 function getEffectiveStatus(params: { view: string; status: string }) {
   if (params.status) {
     return params.status;
@@ -290,6 +309,23 @@ export default async function CompaniesPage({
           </Link>
 
           <Link
+            href={buildOutreachExportHref({
+              search,
+              country,
+            })}
+            style={{
+              padding: "10px 16px",
+              borderRadius: "8px",
+              border: "1px solid #ccc",
+              textDecoration: "none",
+              color: "inherit",
+              display: "inline-block",
+            }}
+          >
+            ExportOutreach
+          </Link>
+
+          <Link
             href="/reviewQueue"
             style={{
               padding: "10px 16px",
@@ -316,6 +352,7 @@ export default async function CompaniesPage({
           >
             DocelowaQueue
           </Link>
+
           <Link
             href="/importBatches"
             style={{

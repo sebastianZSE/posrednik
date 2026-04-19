@@ -294,7 +294,7 @@ async function findFinishedBatchByHash(sourceFileHash: string) {
 async function getExistingImportKeys(importKeys: string[]) {
   const existingKeys = new Set<string>();
 
-  const chunks = chunkArray(importKeys, 500);
+  const chunks = chunkArray(importKeys, 25);
 
   for (const chunk of chunks) {
     const { data, error } = await supabase
