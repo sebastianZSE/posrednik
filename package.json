@@ -11,7 +11,8 @@
     "promote:imports": "tsx scripts/promoteImports.ts",
     "import:enrichResults": "tsx scripts/importEnrichResults.ts",
     "pipeline:apify": "tsx scripts/runFullPipeline.ts",
-    "enrich:deWebsites": "tsx scripts/enrichDeWebsites.ts"
+    "enrich:deWebsites": "tsx scripts/enrichDeWebsites.ts",
+    "backfill:contactValidation": "tsx scripts/backfillContactValidation.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",

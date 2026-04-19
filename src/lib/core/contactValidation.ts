@@ -1,10 +1,5 @@
-import {
-  parsePhoneNumberFromString,
-  type CountryCode,
-} from 'libphonenumber-js';
-
-export type ContactValidationStatus = 'validLike' | 'risky' | 'invalidLike';
-export type EmailKind = 'generic' | 'personal' | 'unknown';
+export type ContactValidationStatus = "validLike" | "risky" | "invalidLike";
+export type EmailKind = "generic" | "personal" | "unknown";
 
 export type ContactValidationMetadata = {
   validationStatus: ContactValidationStatus;
@@ -16,75 +11,61 @@ export type ContactValidationMetadata = {
   phoneCountryCode: string | null;
 };
 
-export const CONTACT_VALIDATION_VERSION = 'contact_validation_v1';
+export const CONTACT_VALIDATION_VERSION = "contact_validation_v2";
 
 const FREE_EMAIL_PROVIDERS = new Set([
-  'gmail.com',
-  'googlemail.com',
-  'gmx.de',
-  'gmx.net',
-  'web.de',
-  'yahoo.com',
-  'yahoo.de',
-  'outlook.com',
-  'hotmail.com',
-  'live.com',
-  'icloud.com',
-  'me.com',
-  'aol.com',
-  'proton.me',
-  'protonmail.com',
-  't-online.de',
-  'freenet.de',
-  'arcor.de',
+  "gmail.com",
+  "googlemail.com",
+  "gmx.de",
+  "gmx.net",
+  "web.de",
+  "yahoo.com",
+  "yahoo.de",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "icloud.com",
+  "me.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+  "t-online.de",
+  "freenet.de",
+  "arcor.de",
 ]);
 
 const GENERIC_EMAIL_LOCAL_PARTS = new Set([
-  'info',
-  'kontakt',
-  'contact',
-  'mail',
-  'office',
-  'buero',
-  'buro',
-  'service',
-  'support',
-  'team',
-  'sales',
-  'vertrieb',
-  'anfrage',
-  'anfragen',
-  'admin',
-  'post',
-  'hello',
-  'hallo',
-  'buchhaltung',
-  'rechnung',
-  'jobs',
-  'karriere',
+  "info",
+  "kontakt",
+  "contact",
+  "mail",
+  "office",
+  "buero",
+  "buro",
+  "service",
+  "support",
+  "team",
+  "sales",
+  "vertrieb",
+  "anfrage",
+  "anfragen",
+  "admin",
+  "post",
+  "hello",
+  "hallo",
+  "buchhaltung",
+  "rechnung",
+  "jobs",
+  "karriere",
 ]);
-
-function normalizeCountryCode(
-  country: string | null | undefined
-): CountryCode | undefined {
-  if (!country) return undefined;
-
-  const normalized = country.trim().toUpperCase();
-
-  if (normalized === 'DE' || normalized === 'AT' || normalized === 'CH') {
-    return normalized as CountryCode;
-  }
-
-  return undefined;
-}
 
 function normalizeTextForComparison(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/\s+/g, ' ')
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -104,14 +85,14 @@ function normalizeDomainValue(value: string | null | undefined): string | null {
 
     return (
       url.hostname
-        .replace(/^www\./, '')
+        .replace(/^www\./, "")
         .trim()
         .toLowerCase() || null
     );
   } catch {
     return (
       trimmed
-        .replace(/^www\./, '')
+        .replace(/^www\./, "")
         .trim()
         .toLowerCase() || null
     );
@@ -119,7 +100,7 @@ function normalizeDomainValue(value: string | null | undefined): string | null {
 }
 
 function getEmailParts(normalizedEmail: string) {
-  const [localPart = '', domainPart = ''] = normalizedEmail.split('@');
+  const [localPart = "", domainPart = ""] = normalizedEmail.split("@");
 
   return {
     localPart: localPart.trim().toLowerCase(),
@@ -131,11 +112,11 @@ function detectEmailKind(localPart: string): EmailKind {
   const normalizedLocalPart = normalizeTextForComparison(localPart);
 
   if (!normalizedLocalPart) {
-    return 'unknown';
+    return "unknown";
   }
 
   if (GENERIC_EMAIL_LOCAL_PARTS.has(normalizedLocalPart)) {
-    return 'generic';
+    return "generic";
   }
 
   const genericPrefixMatch = [...GENERIC_EMAIL_LOCAL_PARTS].some(
@@ -146,11 +127,11 @@ function detectEmailKind(localPart: string): EmailKind {
       normalizedLocalPart.startsWith(`${prefix}-`) ||
       normalizedLocalPart.startsWith(`${prefix}+`) ||
       normalizedLocalPart.startsWith(`${prefix}1`) ||
-      normalizedLocalPart.startsWith(`${prefix}2`)
+      normalizedLocalPart.startsWith(`${prefix}2`),
   );
 
   if (genericPrefixMatch) {
-    return 'generic';
+    return "generic";
   }
 
   const looksLikePersonal =
@@ -159,10 +140,10 @@ function detectEmailKind(localPart: string): EmailKind {
     /^[a-z]{2,20}[._-][a-z]\.[a-z]{2,30}$/i.test(normalizedLocalPart);
 
   if (looksLikePersonal) {
-    return 'personal';
+    return "personal";
   }
 
-  return 'unknown';
+  return "unknown";
 }
 
 function computeSameDomainAsCompany(params: {
@@ -182,6 +163,17 @@ function computeSameDomainAsCompany(params: {
   }
 
   return false;
+}
+
+function detectPhoneCountryFromE164(value: string): "DE" | "AT" | "CH" | null {
+  if (value.startsWith("+49")) return "DE";
+  if (value.startsWith("+43")) return "AT";
+  if (value.startsWith("+41")) return "CH";
+  return null;
+}
+
+function looksLikeStrictE164(value: string): boolean {
+  return /^\+[1-9]\d{7,14}$/.test(value);
 }
 
 function buildMetadata(params: {
@@ -204,14 +196,14 @@ function buildMetadata(params: {
 
 export function buildFailedValidationMetadata(): ContactValidationMetadata {
   return buildMetadata({
-    validationStatus: 'invalidLike',
+    validationStatus: "invalidLike",
   });
 }
 
 export function isValidLikeValidationStatus(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): boolean {
-  return value === 'validLike';
+  return value === "validLike";
 }
 
 export function validateNormalizedEmailContact(params: {
@@ -229,8 +221,8 @@ export function validateNormalizedEmailContact(params: {
 
   if (!hasBasicShape) {
     return buildMetadata({
-      validationStatus: 'invalidLike',
-      emailKind: 'unknown',
+      validationStatus: "invalidLike",
+      emailKind: "unknown",
       emailSameDomainAsCompany: null,
     });
   }
@@ -243,7 +235,7 @@ export function validateNormalizedEmailContact(params: {
 
   if (sameDomainAsCompany === true) {
     return buildMetadata({
-      validationStatus: 'validLike',
+      validationStatus: "validLike",
       emailKind,
       emailSameDomainAsCompany: true,
     });
@@ -251,14 +243,14 @@ export function validateNormalizedEmailContact(params: {
 
   if (FREE_EMAIL_PROVIDERS.has(domainPart)) {
     return buildMetadata({
-      validationStatus: 'risky',
+      validationStatus: "risky",
       emailKind,
       emailSameDomainAsCompany: sameDomainAsCompany,
     });
   }
 
   return buildMetadata({
-    validationStatus: 'risky',
+    validationStatus: "risky",
     emailKind,
     emailSameDomainAsCompany: sameDomainAsCompany,
   });
@@ -270,56 +262,44 @@ export function validatePhoneContact(params: {
   companyCountry: string | null | undefined;
 }): ContactValidationMetadata {
   const normalizedPhone = params.normalizedPhone.trim();
-  const rawPhone = (params.rawPhone ?? '').trim();
+  const rawPhone = (params.rawPhone ?? "").trim();
+  const normalizedCompanyCountry =
+    params.companyCountry?.trim().toUpperCase() ?? null;
 
   if (!normalizedPhone && !rawPhone) {
     return buildFailedValidationMetadata();
   }
 
-  const countryCode = normalizeCountryCode(params.companyCountry);
-
-  try {
-    const parsed =
-      (normalizedPhone.startsWith('+')
-        ? parsePhoneNumberFromString(normalizedPhone)
-        : null) ??
-      (rawPhone.startsWith('+')
-        ? parsePhoneNumberFromString(rawPhone)
-        : null) ??
-      (rawPhone ? parsePhoneNumberFromString(rawPhone, countryCode) : null) ??
-      (normalizedPhone
-        ? parsePhoneNumberFromString(normalizedPhone, countryCode)
-        : null);
-
-    if (!parsed || !parsed.isValid()) {
-      return buildMetadata({
-        validationStatus: 'invalidLike',
-        phoneE164: null,
-        phoneCountryCode: null,
-      });
-    }
-
-    const parsedCountry = parsed.country ?? null;
-    const normalizedCompanyCountry =
-      params.companyCountry?.trim().toUpperCase() ?? null;
+  if (looksLikeStrictE164(normalizedPhone)) {
+    const detectedCountry = detectPhoneCountryFromE164(normalizedPhone);
 
     const validationStatus: ContactValidationStatus =
       normalizedCompanyCountry &&
-      parsedCountry &&
-      normalizedCompanyCountry !== parsedCountry
-        ? 'risky'
-        : 'validLike';
+      detectedCountry &&
+      normalizedCompanyCountry !== detectedCountry
+        ? "risky"
+        : "validLike";
 
     return buildMetadata({
       validationStatus,
-      phoneE164: parsed.number,
-      phoneCountryCode: parsedCountry,
+      phoneE164: normalizedPhone,
+      phoneCountryCode: detectedCountry,
     });
-  } catch {
+  }
+
+  const digitCount = normalizedPhone.replace(/\D/g, "").length;
+
+  if (digitCount >= 7) {
     return buildMetadata({
-      validationStatus: 'invalidLike',
+      validationStatus: "risky",
       phoneE164: null,
       phoneCountryCode: null,
     });
   }
+
+  return buildMetadata({
+    validationStatus: "invalidLike",
+    phoneE164: null,
+    phoneCountryCode: null,
+  });
 }
