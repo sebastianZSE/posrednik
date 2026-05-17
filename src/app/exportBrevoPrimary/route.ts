@@ -1,5 +1,5 @@
-import { supabase } from "@/lib/supabase";
-
+//import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
 type CompanyItem = {
   id: string;
   company_name: string | null;

@@ -1,25 +1,25 @@
 {
-  "generatedAt": "2026-04-04T18:59:14.684Z",
+  "generatedAt": "2026-05-09T20:39:47.724Z",
   "counts": {
-    "allCompanies": 6,
-    "readyCompanies": 4,
-    "enrichCompanies": 1,
-    "skipCompanies": 1,
-    "allContacts": 10
+    "allCompanies": 318,
+    "readyCompanies": 193,
+    "enrichCompanies": 125,
+    "skipCompanies": 0,
+    "allContacts": 994
   },
   "latestBatch": {
-    "id": "95ff9eae-6d80-4ad7-b77f-9fa5d55b1bf8",
+    "id": "b340ac10-477b-4696-beb7-652272ca2cee",
     "sourceName": "apify_json",
     "sourceFileName": "apify.json",
     "batchStatus": "skipped_duplicate_file",
-    "rowsTotal": 2,
+    "rowsTotal": 167,
     "rowsMapped": 0,
     "rowsInserted": 0,
-    "rowsDuplicates": 2,
+    "rowsDuplicates": 167,
     "rowsErrors": 0,
-    "startedAt": "2026-04-04T18:59:11.572563+00:00",
-    "finishedAt": "2026-04-04T18:59:11.42+00:00",
-    "notes": "Plik byl juz zaimportowany w batchu 2c0247c4-5ac8-43a6-bc09-238d76ae54e5"
+    "startedAt": "2026-05-09T20:39:37.398548+00:00",
+    "finishedAt": "2026-05-09T20:39:37.755+00:00",
+    "notes": "Plik byl juz zaimportowany w batchu 8ac23374-339b-435a-a94f-c7899ef55922"
   },
   "files": {
     "readyCompaniesCsv": "exports/readyCompanies.csv",

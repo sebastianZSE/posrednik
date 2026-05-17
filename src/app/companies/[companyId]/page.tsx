@@ -1,7 +1,7 @@
 //pojedyncza firma - szczegóły, kontakty, źródłowe rekordy importu
 
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
 
 type CompanyDetailsPageProps = {
   params: Promise<{

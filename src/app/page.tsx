@@ -5,8 +5,8 @@
 
 
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase";
-
+//import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
 async function addTestImport() {
   "use server";
 

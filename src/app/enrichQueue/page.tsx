@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
 
 type CompanyItem = {
   id: string;
