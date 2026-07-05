@@ -1,5 +1,9 @@
 import { supabaseAdmin as supabase } from '../src/lib/core/supabaseAdmin';
 import {
+  isSharedDomain,
+  hasSignificantNameOverlap,
+} from '../src/lib/core/dedupGuards';
+import {
   normalizeEmail,
   normalizePhone,
 } from '../src/lib/core/contactNormalization';
@@ -98,7 +102,7 @@ async function findExistingCompany(params: {
   country: string | null;
   normalizedPhone: string | null;
 }) {
-  if (params.domain) {
+  if (params.domain && !isSharedDomain(params.domain)) {
     const { data, error } = await supabase
       .from('companies')
       .select(
@@ -112,7 +116,17 @@ async function findExistingCompany(params: {
     }
 
     if (data && data.length > 0) {
-      return data[0] as CompanyRow;
+      const candidate = data[0] as CompanyRow;
+
+      // bezpiecznik: nie sklejaj firm o zupełnie różnych nazwach
+      if (
+        hasSignificantNameOverlap(
+          params.normalizedName,
+          candidate.normalized_name
+        )
+      ) {
+        return candidate;
+      }
     }
   }
 
@@ -148,7 +162,17 @@ async function findExistingCompany(params: {
       }
 
       if (companyData && companyData.length > 0) {
-        return companyData[0] as CompanyRow;
+        const candidate = companyData[0] as CompanyRow;
+
+        // bezpiecznik: nie sklejaj firm o zupełnie różnych nazwach
+        if (
+          hasSignificantNameOverlap(
+            params.normalizedName,
+            candidate.normalized_name
+          )
+        ) {
+          return candidate;
+        }
       }
     }
   }

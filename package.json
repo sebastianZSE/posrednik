@@ -13,7 +13,8 @@
     "pipeline:apify": "tsx scripts/runFullPipeline.ts",
     "enrich:deWebsites": "tsx scripts/enrichDeWebsites.ts",
     "backfill:contactValidation": "tsx scripts/backfillContactValidation.ts",
-    "refresh:companyStatuses": "tsx scripts/refreshCompanyStatuses.ts"
+    "refresh:companyStatuses": "tsx scripts/refreshCompanyStatuses.ts",
+    "backup:db": "node --env-file=.env.local scripts/backupDatabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.101.1",
