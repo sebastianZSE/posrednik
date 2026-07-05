@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
+import { fetchAllRows } from "@/lib/core/fetchAllRows";
 
 type CompanyItem = {
   id: string;
@@ -150,19 +151,27 @@ const statLabelStyle = {
 } as const;
 
 export default async function ReviewQueuePage() {
-  const { data: companiesData, error: companiesError } = await supabase
-    .from("companies")
-    .select(
-      "id, company_name, legal_name, domain, website, city, country, category, status, quality_score, created_at",
-    )
-    .order("created_at", { ascending: false });
+  const { rows: companiesData, error: companiesError } =
+    await fetchAllRows<CompanyItem>(() =>
+      supabase
+        .from("companies")
+        .select(
+          "id, company_name, legal_name, domain, website, city, country, category, status, quality_score, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }),
+    );
 
-  const { data: contactsData, error: contactsError } = await supabase
-    .from("company_contacts")
-    .select(
-      "id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at",
-    )
-    .order("created_at", { ascending: false });
+  const { rows: contactsData, error: contactsError } =
+    await fetchAllRows<ContactItem>(() =>
+      supabase
+        .from("company_contacts")
+        .select(
+          "id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at",
+        )
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true }),
+    );
 
   const { data: importErrorsData, error: importErrorsError } = await supabase
     .from("imports_raw")
@@ -172,8 +181,8 @@ export default async function ReviewQueuePage() {
     .eq("promotion_status", "error")
     .order("imported_at", { ascending: false });
 
-  const companies = (companiesData ?? []) as CompanyItem[];
-  const contacts = (contactsData ?? []) as ContactItem[];
+  const companies = companiesData;
+  const contacts = contactsData;
   const importErrors = (importErrorsData ?? []) as ImportErrorItem[];
 
   const contactMap = groupContactsByCompany(contacts);
