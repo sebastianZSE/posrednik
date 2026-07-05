@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
 
+const PAGE_SIZE = 25;
+
 type CompanyItem = {
   id: string;
   company_name: string | null;
@@ -20,11 +22,7 @@ type ContactItem = {
   company_id: string;
   contact_type: "phone" | "email";
   contact_value: string;
-  normalized_value: string | null;
   is_primary: boolean | null;
-  is_verified: boolean | null;
-  source: string | null;
-  created_at: string | null;
 };
 
 type CompaniesPageProps = {
@@ -33,6 +31,7 @@ type CompaniesPageProps = {
     country?: string;
     status?: string;
     view?: string;
+    page?: string;
   }>;
 };
 
@@ -44,16 +43,18 @@ function getSingleValue(value: string | string[] | undefined) {
   return value ?? "";
 }
 
-function normalizeSearchValue(value: string | null | undefined) {
-  if (!value) return "";
+function getPageNumber(value: string) {
+  const parsed = Number.parseInt(value, 10);
 
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function getSafeSearch(value: string) {
+  return value.replace(/[,()"'%\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function groupContactsByCompany(contacts: ContactItem[]) {
@@ -68,6 +69,23 @@ function groupContactsByCompany(contacts: ContactItem[]) {
   return contactMap;
 }
 
+function getPrimaryContact(
+  contacts: ContactItem[],
+  contactType: "phone" | "email",
+) {
+  const primary = contacts.find(
+    (contact) => contact.contact_type === contactType && contact.is_primary,
+  );
+
+  if (primary) return primary.contact_value;
+
+  const fallback = contacts.find(
+    (contact) => contact.contact_type === contactType,
+  );
+
+  return fallback?.contact_value ?? null;
+}
+
 function getUniqueValues(values: Array<string | null>) {
   return [
     ...new Set(
@@ -76,21 +94,12 @@ function getUniqueValues(values: Array<string | null>) {
   ].sort((firstValue, secondValue) => firstValue.localeCompare(secondValue));
 }
 
-function getStatusLabel(status: string | null) {
-  if (!status) return "brak";
-  return status;
-}
-
-function getQualityLabel(score: number | null) {
-  if (score === null || score === undefined) return "brak";
-  return String(score);
-}
-
 function buildCompaniesHref(params: {
   view?: string;
   search?: string;
   country?: string;
   status?: string;
+  page?: number;
 }) {
   const urlSearchParams = new URLSearchParams();
 
@@ -108,6 +117,10 @@ function buildCompaniesHref(params: {
 
   if (params.status) {
     urlSearchParams.set("status", params.status);
+  }
+
+  if (params.page && params.page > 1) {
+    urlSearchParams.set("page", String(params.page));
   }
 
   const queryString = urlSearchParams.toString();
@@ -204,24 +217,32 @@ function getEffectiveStatus(params: { view: string; status: string }) {
   return "ready";
 }
 
-function getViewLabel(view: string) {
-  if (view === "all") return "all";
-  if (view === "enrich") return "enrich";
-  if (view === "skip") return "skip";
-  return "ready";
+function getViewClass(isActive: boolean) {
+  return isActive ? "btn btn-active" : "btn";
 }
 
-function getViewCardStyle(isActive: boolean) {
-  return {
-    padding: "12px 16px",
-    borderRadius: "10px",
-    border: isActive ? "2px solid #111" : "1px solid #ccc",
-    textDecoration: "none",
-    color: "inherit",
-    display: "inline-block",
-    fontWeight: isActive ? 700 : 400,
-  } as const;
+function getStatusBadgeClass(status: string | null) {
+  if (status === "ready") return "badge badge-ready";
+  if (status === "enrich") return "badge badge-enrich";
+  if (status === "skip") return "badge badge-skip";
+  if (status === "error") return "badge badge-error";
+  return "badge";
 }
+
+const tableHeaderStyle = {
+  textAlign: "left" as const,
+  padding: "10px 12px",
+  borderBottom: "2px solid #ddd",
+  color: "#666",
+  fontSize: "13px",
+  whiteSpace: "nowrap" as const,
+};
+
+const tableCellStyle = {
+  padding: "10px 12px",
+  borderBottom: "1px solid #eee",
+  verticalAlign: "top" as const,
+};
 
 export default async function CompaniesPage({
   searchParams,
@@ -232,6 +253,7 @@ export default async function CompaniesPage({
   const country = getSingleValue(resolvedSearchParams.country);
   const statusFromUrl = getSingleValue(resolvedSearchParams.status);
   const viewFromUrl = getSingleValue(resolvedSearchParams.view);
+  const page = getPageNumber(getSingleValue(resolvedSearchParams.page));
 
   const activeView = viewFromUrl || "ready";
   const effectiveStatus = getEffectiveStatus({
@@ -239,58 +261,140 @@ export default async function CompaniesPage({
     status: statusFromUrl,
   });
 
-  const normalizedSearch = normalizeSearchValue(search);
+  const safeSearch = getSafeSearch(search);
 
-  const { data: companiesData, error: companiesError } = await supabase
+  const rangeFrom = (page - 1) * PAGE_SIZE;
+  const rangeTo = rangeFrom + PAGE_SIZE - 1;
+
+  let companiesQuery = supabase
     .from("companies")
     .select(
       "id, company_name, legal_name, domain, website, city, country, category, status, quality_score, created_at",
-    )
-    .order("created_at", { ascending: false });
+      { count: "exact" },
+    );
 
-  const { data: contactsData, error: contactsError } = await supabase
-    .from("company_contacts")
-    .select(
-      "id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at",
-    )
-    .order("is_primary", { ascending: false })
-    .order("created_at", { ascending: false });
+  if (effectiveStatus) {
+    companiesQuery = companiesQuery.eq("status", effectiveStatus);
+  }
 
-  const allCompanies = (companiesData ?? []) as CompanyItem[];
-  const allContacts = (contactsData ?? []) as ContactItem[];
+  if (country) {
+    companiesQuery = companiesQuery.eq("country", country);
+  }
+
+  if (safeSearch) {
+    companiesQuery = companiesQuery.or(
+      `company_name.ilike.%${safeSearch}%,legal_name.ilike.%${safeSearch}%`,
+    );
+  }
+
+  const {
+    data: companiesData,
+    error: companiesError,
+    count: filteredCount,
+  } = await companiesQuery
+    .order("created_at", { ascending: false })
+    .range(rangeFrom, rangeTo);
+
+  const companies = (companiesData ?? []) as CompanyItem[];
+
+  const { data: filterOptionsData, error: filterOptionsError } = await supabase
+    .from("companies")
+    .select("country, status");
+
+  const filterOptions = (filterOptionsData ?? []) as Array<{
+    country: string | null;
+    status: string | null;
+  }>;
 
   const availableCountries = getUniqueValues(
-    allCompanies.map((company) => company.country),
+    filterOptions.map((row) => row.country),
   );
   const availableStatuses = getUniqueValues(
-    allCompanies.map((company) => company.status),
+    filterOptions.map((row) => row.status),
   );
 
-  const filteredCompanies = allCompanies.filter((company) => {
-    const normalizedCompanyName = normalizeSearchValue(company.company_name);
-    const normalizedLegalName = normalizeSearchValue(company.legal_name);
+  const companyIds = companies.map((company) => company.id);
 
-    const matchesSearch =
-      !normalizedSearch ||
-      normalizedCompanyName.includes(normalizedSearch) ||
-      normalizedLegalName.includes(normalizedSearch);
+  let contacts: ContactItem[] = [];
+  let contactsError: { message: string } | null = null;
 
-    const matchesCountry = !country || company.country === country;
-    const matchesStatus =
-      !effectiveStatus || company.status === effectiveStatus;
+  if (companyIds.length > 0) {
+    const { data: contactsData, error } = await supabase
+      .from("company_contacts")
+      .select("id, company_id, contact_type, contact_value, is_primary")
+      .in("company_id", companyIds)
+      .order("is_primary", { ascending: false })
+      .order("created_at", { ascending: false });
 
-    return matchesSearch && matchesCountry && matchesStatus;
-  });
+    contacts = (contactsData ?? []) as ContactItem[];
+    contactsError = error;
+  }
 
-  const contactMap = groupContactsByCompany(allContacts);
+  const contactMap = groupContactsByCompany(contacts);
 
-  const filteredContactsCount = filteredCompanies.reduce((count, company) => {
-    const companyContacts = contactMap.get(company.id) ?? [];
-    return count + companyContacts.length;
-  }, 0);
+  const totalFiltered = filteredCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+
+  const isPageOutOfRange =
+    Boolean(companiesError) &&
+    page > 1 &&
+    companiesError?.message.toLowerCase().includes("range");
+
+  const paginationControls = totalPages > 1 && (
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            {page > 1 ? (
+              <Link
+                href={buildCompaniesHref({
+                  view: activeView,
+                  search,
+                  country,
+                  status: statusFromUrl,
+                  page: page - 1,
+                })}
+                className="btn"
+              >
+                Poprzednia
+              </Link>
+            ) : (
+              <span className="btn btn-disabled">
+                Poprzednia
+              </span>
+            )}
+
+            <span>
+              Strona {page} z {totalPages}
+            </span>
+
+            {page < totalPages ? (
+              <Link
+                href={buildCompaniesHref({
+                  view: activeView,
+                  search,
+                  country,
+                  status: statusFromUrl,
+                  page: page + 1,
+                })}
+                className="btn"
+              >
+                Następna
+              </Link>
+            ) : (
+              <span className="btn btn-disabled">
+                Następna
+              </span>
+            )}
+          </div>
+  );
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial, sans-serif" }}>
+    <main style={{ padding: "40px" }}>
       <div
         style={{
           display: "flex",
@@ -300,7 +404,7 @@ export default async function CompaniesPage({
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ margin: 0 }}>Companies</h1>
+        <h1 style={{ margin: 0 }}>Firmy</h1>
 
         <div
           style={{
@@ -317,16 +421,9 @@ export default async function CompaniesPage({
               country,
               status: statusFromUrl,
             })}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ExportCsv
+            Eksport CSV
           </Link>
 
           <Link
@@ -334,16 +431,9 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ExportOutreach
+            Eksport outreach
           </Link>
 
           <Link
@@ -351,58 +441,30 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ExportBrevoPrimary
+            Eksport Brevo
           </Link>
 
           <Link
             href="/reviewQueue"
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ReviewQueue
+            Weryfikacja
           </Link>
 
           <Link
             href="/enrichQueue"
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            DocelowaQueue
+            Wzbogacanie
           </Link>
 
           <Link
             href="/importBatches"
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ImportBatches
+            Importy
           </Link>
         </div>
       </div>
@@ -415,7 +477,7 @@ export default async function CompaniesPage({
           borderRadius: "12px",
         }}
       >
-        <h2 style={{ marginTop: 0 }}>LeadQueues</h2>
+        <h2 style={{ marginTop: 0 }}>Widoki</h2>
 
         <div
           style={{
@@ -431,9 +493,9 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={getViewCardStyle(activeView === "ready")}
+            className={getViewClass(activeView === "ready")}
           >
-            Ready
+            Gotowe
           </Link>
 
           <Link
@@ -442,9 +504,9 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={getViewCardStyle(activeView === "enrich")}
+            className={getViewClass(activeView === "enrich")}
           >
-            Enrich
+            Do wzbogacenia
           </Link>
 
           <Link
@@ -453,9 +515,9 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={getViewCardStyle(activeView === "skip")}
+            className={getViewClass(activeView === "skip")}
           >
-            Skip
+            Pominięte
           </Link>
 
           <Link
@@ -464,9 +526,9 @@ export default async function CompaniesPage({
               search,
               country,
             })}
-            style={getViewCardStyle(activeView === "all")}
+            className={getViewClass(activeView === "all")}
           >
-            All
+            Wszystkie
           </Link>
         </div>
       </section>
@@ -479,7 +541,7 @@ export default async function CompaniesPage({
           borderRadius: "12px",
         }}
       >
-        <h2 style={{ marginTop: 0 }}>SearchAndFilters</h2>
+        <h2 style={{ marginTop: 0 }}>Szukaj i filtruj</h2>
 
         <form
           method="get"
@@ -500,7 +562,7 @@ export default async function CompaniesPage({
               htmlFor="search"
               style={{ display: "block", marginBottom: "6px" }}
             >
-              Search
+              Szukaj
             </label>
             <input
               id="search"
@@ -523,7 +585,7 @@ export default async function CompaniesPage({
               htmlFor="country"
               style={{ display: "block", marginBottom: "6px" }}
             >
-              Country
+              Kraj
             </label>
             <select
               id="country"
@@ -554,7 +616,7 @@ export default async function CompaniesPage({
               htmlFor="status"
               style={{ display: "block", marginBottom: "6px" }}
             >
-              Status override
+              Status (ręczny wybór)
             </label>
             <select
               id="status"
@@ -568,7 +630,7 @@ export default async function CompaniesPage({
                 border: "1px solid #ccc",
               }}
             >
-              <option value="">Automatycznie z view</option>
+              <option value="">Automatycznie z widoku</option>
               {availableStatuses.map((statusValue) => (
                 <option
                   key={statusValue}
@@ -590,155 +652,191 @@ export default async function CompaniesPage({
           >
             <button
               type="submit"
-              style={{
-                padding: "10px 16px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                cursor: "pointer",
-                background: "#fff",
-              }}
+              className="btn"
             >
               Filtruj
             </button>
 
             <Link
               href="/companies"
-              style={{
-                padding: "10px 16px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                textDecoration: "none",
-                color: "inherit",
-                display: "inline-block",
-              }}
+              className="btn"
             >
-              Reset do ready
+              Wyczyść filtry
             </Link>
           </div>
         </form>
       </section>
 
-      <section style={{ marginTop: "24px" }}>
-        <p>Liczba wszystkich firm: {allCompanies.length}</p>
-        <p>Liczba wyników po filtrowaniu: {filteredCompanies.length}</p>
-        <p>Liczba kontaktów w widocznych wynikach: {filteredContactsCount}</p>
-        <p>
-          companies error: {companiesError ? companiesError.message : "brak"}
+      {(companiesError || contactsError || filterOptionsError) &&
+        !isPageOutOfRange && (
+          <section
+            style={{
+              marginTop: "24px",
+              padding: "16px 20px",
+              border: "1px solid #e0b4b4",
+              borderRadius: "12px",
+              background: "#fff6f6",
+              color: "#9f3a38",
+            }}
+          >
+            <strong>Wystąpił błąd podczas pobierania danych:</strong>
+            {companiesError && (
+              <p style={{ margin: "6px 0 0" }}>{companiesError.message}</p>
+            )}
+            {contactsError && (
+              <p style={{ margin: "6px 0 0" }}>{contactsError.message}</p>
+            )}
+            {filterOptionsError && (
+              <p style={{ margin: "6px 0 0" }}>{filterOptionsError.message}</p>
+            )}
+          </section>
+        )}
+
+      <section
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          color: "#666",
+        }}
+      >
+        <p style={{ margin: 0 }}>
+          Wyniki: {totalFiltered} firm
+          {totalFiltered > 0 &&
+            ` · pozycje ${rangeFrom + 1}–${Math.min(
+              rangeFrom + PAGE_SIZE,
+              totalFiltered,
+            )}`}
         </p>
-        <p>contacts error: {contactsError ? contactsError.message : "brak"}</p>
+
+        {paginationControls}
       </section>
 
-      <section style={{ marginTop: "24px" }}>
-        <h2>Aktywny widok</h2>
-        <p>view: {getViewLabel(activeView)}</p>
-        <p>effectiveStatus: {effectiveStatus || "brak"}</p>
-        <p>search: {search || "brak"}</p>
-        <p>country: {country || "brak"}</p>
-        <p>status override: {statusFromUrl || "brak"}</p>
-      </section>
-
-      <section style={{ marginTop: "32px" }}>
-        {filteredCompanies.length === 0 ? (
+      <section style={{ marginTop: "16px" }}>
+        {isPageOutOfRange ? (
+          <div>
+            <p>Ta strona nie istnieje dla bieżących filtrów.</p>
+            <Link
+              href={buildCompaniesHref({
+                view: activeView,
+                search,
+                country,
+                status: statusFromUrl,
+              })}
+              className="btn"
+            >
+              Wróć na pierwszą stronę
+            </Link>
+          </div>
+        ) : companies.length === 0 ? (
           <p>Brak firm pasujących do filtrów.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {filteredCompanies.map((company) => {
-              const companyContacts = contactMap.get(company.id) ?? [];
+          <div
+            style={{
+              border: "1px solid #ddd",
+              borderRadius: "12px",
+              background: "#fff",
+              overflowX: "auto",
+            }}
+          >
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "14px",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={tableHeaderStyle}>Nazwa</th>
+                  <th style={tableHeaderStyle}>Miasto</th>
+                  <th style={tableHeaderStyle}>Kraj</th>
+                  <th style={tableHeaderStyle}>Kategoria</th>
+                  <th style={tableHeaderStyle}>Status</th>
+                  <th style={tableHeaderStyle}>Jakość</th>
+                  <th style={tableHeaderStyle}>E-mail</th>
+                  <th style={tableHeaderStyle}>Telefon</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companies.map((company) => {
+                  const companyContacts = contactMap.get(company.id) ?? [];
+                  const primaryEmail = getPrimaryContact(
+                    companyContacts,
+                    "email",
+                  );
+                  const primaryPhone = getPrimaryContact(
+                    companyContacts,
+                    "phone",
+                  );
 
-              return (
-                <article
-                  key={company.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: "12px",
-                    padding: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <h2 style={{ margin: 0 }}>
-                      {company.company_name ?? "brak nazwy"}
-                    </h2>
-
-                    <Link
-                      href={`/companies/${company.id}`}
-                      style={{
-                        padding: "10px 16px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        textDecoration: "none",
-                        color: "inherit",
-                        display: "inline-block",
-                      }}
-                    >
-                      Zobacz szczegóły
-                    </Link>
-                  </div>
-
-                  <div style={{ marginTop: "12px" }}>
-                    <p>
-                      <strong>legalName:</strong> {company.legal_name ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>domain:</strong> {company.domain ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>website:</strong> {company.website ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>city:</strong> {company.city ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>country:</strong> {company.country ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>category:</strong> {company.category ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>status:</strong> {getStatusLabel(company.status)}
-                    </p>
-                    <p>
-                      <strong>qualityScore:</strong>{" "}
-                      {getQualityLabel(company.quality_score)}
-                    </p>
-                  </div>
-
-                  <div style={{ marginTop: "18px" }}>
-                    <h3 style={{ marginBottom: "10px" }}>Kontakty</h3>
-
-                    {companyContacts.length === 0 ? (
-                      <p>Brak kontaktów.</p>
-                    ) : (
-                      <ul style={{ paddingLeft: "20px" }}>
-                        {companyContacts.map((contact) => (
-                          <li
-                            key={contact.id}
-                            style={{ marginBottom: "8px" }}
-                          >
-                            <strong>{contact.contact_type}</strong>:{" "}
-                            {contact.contact_value}
-                            {contact.is_primary ? " | primary" : ""}
-                            {contact.is_verified ? " | verified" : ""}
-                            {contact.source
-                              ? ` | source: ${contact.source}`
-                              : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+                  return (
+                    <tr key={company.id}>
+                      <td style={tableCellStyle}>
+                        <Link
+                          href={`/companies/${company.id}`}
+                          style={{
+                            color: "inherit",
+                            fontWeight: 700,
+                          }}
+                        >
+                          {company.company_name ?? "brak nazwy"}
+                        </Link>
+                        {company.website && (
+                          <div style={{ marginTop: "4px" }}>
+                            <a
+                              href={company.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: "#666", fontSize: "13px" }}
+                            >
+                              {company.domain ?? company.website}
+                            </a>
+                          </div>
+                        )}
+                      </td>
+                      <td style={tableCellStyle}>{company.city ?? "—"}</td>
+                      <td style={tableCellStyle}>{company.country ?? "—"}</td>
+                      <td style={tableCellStyle}>{company.category ?? "—"}</td>
+                      <td style={tableCellStyle}>
+                        <span className={getStatusBadgeClass(company.status)}>
+                          {company.status ?? "brak"}
+                        </span>
+                      </td>
+                      <td style={tableCellStyle}>
+                        {company.quality_score ?? "—"}
+                      </td>
+                      <td style={tableCellStyle}>{primaryEmail ?? "—"}</td>
+                      <td style={tableCellStyle}>{primaryPhone ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+      </section>
+
+      <section
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        {paginationControls}
+        <a
+          href="#"
+          className="btn"
+          style={{ marginLeft: "auto" }}
+        >
+          Do góry
+        </a>
       </section>
     </main>
   );

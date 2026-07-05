@@ -19,16 +19,6 @@ export const metadata: Metadata = {
 };
 
 function AppNavigation() {
-  const navStyle = {
-    padding: "10px 16px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    textDecoration: "none",
-    color: "inherit",
-    display: "inline-block",
-    background: "#fff",
-  } as const;
-
   return (
     <header
       style={{
@@ -48,39 +38,43 @@ function AppNavigation() {
           alignItems: "center",
         }}
       >
+        <span style={{ fontWeight: 700, marginRight: "12px" }}>
+          Baza firm elektrycznych
+        </span>
+
         <Link
           href="/"
-          style={navStyle}
+          className="btn"
         >
-          Home
+          Start
         </Link>
 
         <Link
           href="/companies"
-          style={navStyle}
+          className="btn"
         >
-          Companies
+          Firmy
         </Link>
 
         <Link
           href="/enrichQueue"
-          style={navStyle}
+          className="btn"
         >
-          Enrich
+          Wzbogacanie
         </Link>
 
         <Link
           href="/reviewQueue"
-          style={navStyle}
+          className="btn"
         >
-          Review
+          Weryfikacja
         </Link>
 
         <Link
           href="/importBatches"
-          style={navStyle}
+          className="btn"
         >
-          ImportBatches
+          Importy
         </Link>
       </nav>
     </header>
@@ -95,14 +89,10 @@ export default function RootLayout({
   return (
     <html
       lang="pl"
+      data-scroll-behavior="smooth"
       className={`${geistSans.variable} ${geistMono.variable}`}
     >
-      <body
-        style={{
-          margin: 0,
-          background: "#fafafa",
-        }}
-      >
+      <body>
         <AppNavigation />
         {children}
       </body>

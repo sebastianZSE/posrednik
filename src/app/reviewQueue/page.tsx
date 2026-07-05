@@ -57,7 +57,7 @@ function hasPhone(contacts: ContactItem[]) {
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "brak";
+  if (!value) return "—";
 
   const date = new Date(value);
 
@@ -68,79 +68,86 @@ function formatDate(value: string | null) {
   return date.toLocaleString("pl-PL");
 }
 
-function CompanyCard({
-  company,
-  contacts,
+function getStatusBadgeClass(status: string | null) {
+  if (status === "ready") return "badge badge-ready";
+  if (status === "enrich") return "badge badge-enrich";
+  if (status === "skip") return "badge badge-skip";
+  if (status === "error") return "badge badge-error";
+  return "badge";
+}
+
+function CompaniesTable({
+  companies,
+  contactMap,
 }: {
-  company: CompanyItem;
-  contacts: ContactItem[];
+  companies: CompanyItem[];
+  contactMap: Map<string, ContactItem[]>;
 }) {
   return (
-    <article
-      style={{
-        border: "1px solid #ddd",
-        borderRadius: "12px",
-        padding: "20px",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          gap: "12px",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <h3 style={{ margin: 0 }}>{company.company_name ?? "brak nazwy"}</h3>
+    <div className="table-wrap">
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Nazwa</th>
+            <th>Miasto</th>
+            <th>Kraj</th>
+            <th>Kategoria</th>
+            <th>Status</th>
+            <th>Jakość</th>
+            <th>Kontakty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {companies.map((company) => {
+            const contacts = contactMap.get(company.id) ?? [];
 
-        <Link
-          href={`/companies/${company.id}`}
-          style={{
-            padding: "10px 16px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            textDecoration: "none",
-            color: "inherit",
-            display: "inline-block",
-          }}
-        >
-          Zobacz szczegóły
-        </Link>
-      </div>
-
-      <div style={{ marginTop: "12px" }}>
-        <p>
-          <strong>legalName:</strong> {company.legal_name ?? "brak"}
-        </p>
-        <p>
-          <strong>domain:</strong> {company.domain ?? "brak"}
-        </p>
-        <p>
-          <strong>website:</strong> {company.website ?? "brak"}
-        </p>
-        <p>
-          <strong>city:</strong> {company.city ?? "brak"}
-        </p>
-        <p>
-          <strong>country:</strong> {company.country ?? "brak"}
-        </p>
-        <p>
-          <strong>category:</strong> {company.category ?? "brak"}
-        </p>
-        <p>
-          <strong>status:</strong> {company.status ?? "brak"}
-        </p>
-        <p>
-          <strong>qualityScore:</strong> {company.quality_score ?? "brak"}
-        </p>
-        <p>
-          <strong>contactsCount:</strong> {contacts.length}
-        </p>
-      </div>
-    </article>
+            return (
+              <tr key={company.id}>
+                <td>
+                  <Link
+                    href={`/companies/${company.id}`}
+                    style={{ color: "inherit", fontWeight: 700 }}
+                  >
+                    {company.company_name ?? "brak nazwy"}
+                  </Link>
+                </td>
+                <td>{company.city ?? "—"}</td>
+                <td>{company.country ?? "—"}</td>
+                <td>{company.category ?? "—"}</td>
+                <td>
+                  <span className={getStatusBadgeClass(company.status)}>
+                    {company.status ?? "brak"}
+                  </span>
+                </td>
+                <td>{company.quality_score ?? "—"}</td>
+                <td>{contacts.length}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
+
+const statCardStyle = {
+  border: "1px solid #ddd",
+  borderRadius: "12px",
+  padding: "16px 20px",
+  background: "#fff",
+} as const;
+
+const statValueStyle = {
+  fontSize: "26px",
+  fontWeight: 700,
+  margin: "4px 0 0",
+} as const;
+
+const statLabelStyle = {
+  margin: 0,
+  color: "#666",
+  fontSize: "14px",
+} as const;
 
 export default async function ReviewQueuePage() {
   const { data: companiesData, error: companiesError } = await supabase
@@ -191,7 +198,7 @@ export default async function ReviewQueuePage() {
   });
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial, sans-serif" }}>
+    <main style={{ padding: "40px" }}>
       <div
         style={{
           display: "flex",
@@ -201,201 +208,178 @@ export default async function ReviewQueuePage() {
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ margin: 0 }}>ReviewQueue</h1>
+        <h1 style={{ margin: 0 }}>Kolejka weryfikacji</h1>
 
         <Link
           href="/companies"
-          style={{
-            padding: "10px 16px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            textDecoration: "none",
-            color: "inherit",
-            display: "inline-block",
-          }}
+          className="btn"
         >
-          Wróć do companies
+          Wróć do firm
         </Link>
       </div>
 
-      <section style={{ marginTop: "24px" }}>
-        <p>
-          companies error: {companiesError ? companiesError.message : "brak"}
-        </p>
-        <p>contacts error: {contactsError ? contactsError.message : "brak"}</p>
-        <p>
-          importErrors error:{" "}
-          {importErrorsError ? importErrorsError.message : "brak"}
-        </p>
-      </section>
+      {(companiesError || contactsError || importErrorsError) && (
+        <section className="error-box">
+          <strong>Wystąpił błąd podczas pobierania danych:</strong>
+          {companiesError && (
+            <p style={{ margin: "6px 0 0" }}>{companiesError.message}</p>
+          )}
+          {contactsError && (
+            <p style={{ margin: "6px 0 0" }}>{contactsError.message}</p>
+          )}
+          {importErrorsError && (
+            <p style={{ margin: "6px 0 0" }}>{importErrorsError.message}</p>
+          )}
+        </section>
+      )}
 
       <section
         style={{
           marginTop: "24px",
           display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: "12px",
         }}
       >
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>missingEmailCount:</strong> {missingEmailCompanies.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Bez e-maila</p>
+          <p style={statValueStyle}>{missingEmailCompanies.length}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>missingPhoneCount:</strong> {missingPhoneCompanies.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Bez telefonu</p>
+          <p style={statValueStyle}>{missingPhoneCompanies.length}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>lowQualityCount:</strong> {lowQualityCompanies.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Niska jakość</p>
+          <p style={statValueStyle}>{lowQualityCompanies.length}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>notReadyCount:</strong> {notReadyCompanies.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Niegotowe</p>
+          <p style={statValueStyle}>{notReadyCompanies.length}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>importErrorsCount:</strong> {importErrors.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Błędy importu</p>
+          <p style={statValueStyle}>{importErrors.length}</p>
         </div>
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>MissingEmail</h2>
+        <h2>Brak adresu e-mail</h2>
 
         {missingEmailCompanies.length === 0 ? (
           <p>Brak firm bez emaila.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {missingEmailCompanies.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                contacts={contactMap.get(company.id) ?? []}
-              />
-            ))}
-          </div>
+          <CompaniesTable
+            companies={missingEmailCompanies}
+            contactMap={contactMap}
+          />
         )}
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>MissingPhone</h2>
+        <h2>Brak telefonu</h2>
 
         {missingPhoneCompanies.length === 0 ? (
           <p>Brak firm bez telefonu.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {missingPhoneCompanies.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                contacts={contactMap.get(company.id) ?? []}
-              />
-            ))}
-          </div>
+          <CompaniesTable
+            companies={missingPhoneCompanies}
+            contactMap={contactMap}
+          />
         )}
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>LowQuality</h2>
+        <h2>Niska jakość danych</h2>
 
         {lowQualityCompanies.length === 0 ? (
-          <p>Brak firm z niskim qualityScore.</p>
+          <p>Brak firm z niską oceną jakości.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {lowQualityCompanies.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                contacts={contactMap.get(company.id) ?? []}
-              />
-            ))}
-          </div>
+          <CompaniesTable
+            companies={lowQualityCompanies}
+            contactMap={contactMap}
+          />
         )}
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>NotReady</h2>
+        <h2>Niegotowe</h2>
 
         {notReadyCompanies.length === 0 ? (
           <p>Brak firm ze statusem innym niż ready.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {notReadyCompanies.map((company) => (
-              <CompanyCard
-                key={company.id}
-                company={company}
-                contacts={contactMap.get(company.id) ?? []}
-              />
-            ))}
-          </div>
+          <CompaniesTable
+            companies={notReadyCompanies}
+            contactMap={contactMap}
+          />
         )}
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>ImportErrors</h2>
+        <h2>Błędy importu</h2>
 
         {importErrors.length === 0 ? (
-          <p>Brak błędów promotion.</p>
+          <p>Brak błędów importu.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {importErrors.map((item) => (
-              <article
-                key={item.id}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: "12px",
-                  padding: "20px",
-                }}
-              >
-                <p>
-                  <strong>companyName:</strong> {item.company_name ?? "brak"}
-                </p>
-                <p>
-                  <strong>source:</strong> {item.source ?? "brak"}
-                </p>
-                <p>
-                  <strong>promotionStatus:</strong>{" "}
-                  {item.promotion_status ?? "brak"}
-                </p>
-                <p>
-                  <strong>promotionError:</strong>{" "}
-                  {item.promotion_error ?? "brak"}
-                </p>
-                <p>
-                  <strong>importedAt:</strong> {formatDate(item.imported_at)}
-                </p>
-              </article>
-            ))}
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Firma</th>
+                  <th>Źródło</th>
+                  <th>Status</th>
+                  <th>Błąd</th>
+                  <th>Data importu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importErrors.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ fontWeight: 700 }}>
+                      {item.company_name ?? "—"}
+                    </td>
+                    <td>{item.source ?? "—"}</td>
+                    <td>
+                      <span className="badge badge-error">
+                        {item.promotion_status ?? "błąd"}
+                      </span>
+                    </td>
+                    <td>{item.promotion_error ?? "—"}</td>
+                    <td>{formatDate(item.imported_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+      </section>
+
+      <section
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <Link
+          href="/companies"
+          className="btn"
+        >
+          Wróć do firm
+        </Link>
+        <a
+          href="#"
+          className="btn"
+          style={{ marginLeft: "auto" }}
+        >
+          Do góry
+        </a>
       </section>
     </main>
   );

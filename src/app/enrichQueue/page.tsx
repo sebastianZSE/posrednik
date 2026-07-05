@@ -95,30 +95,7 @@ function getPrimaryContact(
   const fallback = contacts.find(
     (contact) => contact.contact_type === contactType,
   );
-  return fallback?.contact_value ?? "brak";
-}
-
-function getAllContacts(
-  contacts: ContactItem[],
-  contactType: "phone" | "email",
-) {
-  const values = contacts
-    .filter((contact) => contact.contact_type === contactType)
-    .map((contact) => contact.contact_value);
-
-  if (values.length === 0) return "brak";
-
-  return values.join(" | ");
-}
-
-function getEnrichAction(contacts: ContactItem[]) {
-  const emailExists = hasEmail(contacts);
-  const phoneExists = hasPhone(contacts);
-
-  if (phoneExists && !emailExists) return "findEmail";
-  if (!phoneExists && emailExists) return "findPhone";
-  if (!phoneExists && !emailExists) return "findEmailAndPhone";
-  return "none";
+  return fallback?.contact_value ?? null;
 }
 
 function buildExportEnrichHref(params: { search?: string; country?: string }) {
@@ -196,7 +173,7 @@ export default async function EnrichQueuePage({
   }).length;
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial, sans-serif" }}>
+    <main style={{ padding: "40px" }}>
       <div
         style={{
           display: "flex",
@@ -206,7 +183,7 @@ export default async function EnrichQueuePage({
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ margin: 0 }}>EnrichQueue</h1>
+        <h1 style={{ margin: 0 }}>Kolejka wzbogacania</h1>
 
         <div
           style={{
@@ -221,43 +198,25 @@ export default async function EnrichQueuePage({
               search,
               country,
             })}
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            ExportEnrichCsv
+            Eksport CSV
           </a>
 
           <Link
             href="/companies?view=enrich"
-            style={{
-              padding: "10px 16px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              textDecoration: "none",
-              color: "inherit",
-              display: "inline-block",
-            }}
+            className="btn"
           >
-            Wróć do companies
+            Wróć do firm
           </Link>
         </div>
       </div>
 
       <section
-        style={{
-          marginTop: "24px",
-          padding: "20px",
-          border: "1px solid #ddd",
-          borderRadius: "12px",
-        }}
+        className="card"
+        style={{ marginTop: "24px" }}
       >
-        <h2 style={{ marginTop: 0 }}>EnrichFilters</h2>
+        <h2 style={{ marginTop: 0 }}>Filtry</h2>
 
         <form
           method="get"
@@ -272,7 +231,7 @@ export default async function EnrichQueuePage({
               htmlFor="search"
               style={{ display: "block", marginBottom: "6px" }}
             >
-              Search
+              Szukaj
             </label>
             <input
               id="search"
@@ -295,7 +254,7 @@ export default async function EnrichQueuePage({
               htmlFor="country"
               style={{ display: "block", marginBottom: "6px" }}
             >
-              Country
+              Kraj
             </label>
             <select
               id="country"
@@ -331,27 +290,14 @@ export default async function EnrichQueuePage({
           >
             <button
               type="submit"
-              style={{
-                padding: "10px 16px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                cursor: "pointer",
-                background: "#fff",
-              }}
+              className="btn"
             >
               Filtruj
             </button>
 
             <Link
               href="/enrichQueue"
-              style={{
-                padding: "10px 16px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-                textDecoration: "none",
-                color: "inherit",
-                display: "inline-block",
-              }}
+              className="btn"
             >
               Reset
             </Link>
@@ -359,128 +305,141 @@ export default async function EnrichQueuePage({
         </form>
       </section>
 
-      <section style={{ marginTop: "24px" }}>
-        <p>Liczba firm enrich: {enrichCompanies.length}</p>
-        <p>Liczba wyników po filtrowaniu: {filteredCompanies.length}</p>
-        <p>needEmailCount: {needEmailCount}</p>
-        <p>needPhoneCount: {needPhoneCount}</p>
-        <p>
-          companies error: {companiesError ? companiesError.message : "brak"}
+      {(companiesError || contactsError) && (
+        <section className="error-box">
+          <strong>Wystąpił błąd podczas pobierania danych:</strong>
+          {companiesError && (
+            <p style={{ margin: "6px 0 0" }}>{companiesError.message}</p>
+          )}
+          {contactsError && (
+            <p style={{ margin: "6px 0 0" }}>{contactsError.message}</p>
+          )}
+        </section>
+      )}
+
+      <section
+        className="muted"
+        style={{ marginTop: "24px" }}
+      >
+        <p style={{ margin: 0 }}>
+          Wyniki: {filteredCompanies.length} z {enrichCompanies.length} firm
+          {" · "}brak e-maila: {needEmailCount}
+          {" · "}brak telefonu: {needPhoneCount}
         </p>
-        <p>contacts error: {contactsError ? contactsError.message : "brak"}</p>
       </section>
 
-      <section style={{ marginTop: "24px" }}>
-        <h2>Aktywne filtry</h2>
-        <p>search: {search || "brak"}</p>
-        <p>country: {country || "brak"}</p>
-      </section>
-
-      <section style={{ marginTop: "32px" }}>
+      <section style={{ marginTop: "16px" }}>
         {filteredCompanies.length === 0 ? (
-          <p>Brak firm w enrichQueue.</p>
+          <p>Brak firm w kolejce wzbogacania.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {filteredCompanies.map((company) => {
-              const contacts = contactMap.get(company.id) ?? [];
-              const emailExists = hasEmail(contacts);
-              const phoneExists = hasPhone(contacts);
-              const enrichAction = getEnrichAction(contacts);
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Nazwa</th>
+                  <th>Miasto</th>
+                  <th>Kraj</th>
+                  <th>Kategoria</th>
+                  <th>Telefon</th>
+                  <th>E-mail</th>
+                  <th>Do znalezienia</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCompanies.map((company) => {
+                  const contacts = contactMap.get(company.id) ?? [];
+                  const phoneCount = contacts.filter(
+                    (contact) => contact.contact_type === "phone",
+                  ).length;
+                  const emailCount = contacts.filter(
+                    (contact) => contact.contact_type === "email",
+                  ).length;
+                  const primaryPhone = getPrimaryContact(contacts, "phone");
+                  const primaryEmail = getPrimaryContact(contacts, "email");
 
-              return (
-                <article
-                  key={company.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: "12px",
-                    padding: "20px",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "12px",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <h2 style={{ margin: 0 }}>
-                      {company.company_name ?? "brak nazwy"}
-                    </h2>
-
-                    <Link
-                      href={`/companies/${company.id}`}
-                      style={{
-                        padding: "10px 16px",
-                        borderRadius: "8px",
-                        border: "1px solid #ccc",
-                        textDecoration: "none",
-                        color: "inherit",
-                        display: "inline-block",
-                      }}
-                    >
-                      Zobacz szczegóły
-                    </Link>
-                  </div>
-
-                  <div style={{ marginTop: "12px" }}>
-                    <p>
-                      <strong>legalName:</strong> {company.legal_name ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>domain:</strong> {company.domain ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>website:</strong> {company.website ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>city:</strong> {company.city ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>country:</strong> {company.country ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>category:</strong> {company.category ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>status:</strong> {company.status ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>qualityScore:</strong>{" "}
-                      {company.quality_score ?? "brak"}
-                    </p>
-                    <p>
-                      <strong>hasPhone:</strong> {phoneExists ? "yes" : "no"}
-                    </p>
-                    <p>
-                      <strong>hasEmail:</strong> {emailExists ? "yes" : "no"}
-                    </p>
-                    <p>
-                      <strong>enrichAction:</strong> {enrichAction}
-                    </p>
-                    <p>
-                      <strong>primaryPhone:</strong>{" "}
-                      {getPrimaryContact(contacts, "phone")}
-                    </p>
-                    <p>
-                      <strong>primaryEmail:</strong>{" "}
-                      {getPrimaryContact(contacts, "email")}
-                    </p>
-                    <p>
-                      <strong>allPhones:</strong>{" "}
-                      {getAllContacts(contacts, "phone")}
-                    </p>
-                    <p>
-                      <strong>allEmails:</strong>{" "}
-                      {getAllContacts(contacts, "email")}
-                    </p>
-                  </div>
-                </article>
-              );
-            })}
+                  return (
+                    <tr key={company.id}>
+                      <td>
+                        <Link
+                          href={`/companies/${company.id}`}
+                          style={{ color: "inherit", fontWeight: 700 }}
+                        >
+                          {company.company_name ?? "brak nazwy"}
+                        </Link>
+                        {company.website && (
+                          <div style={{ marginTop: "4px" }}>
+                            <a
+                              href={company.website}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="muted"
+                              style={{ fontSize: "13px" }}
+                            >
+                              {company.domain ?? company.website}
+                            </a>
+                          </div>
+                        )}
+                      </td>
+                      <td>{company.city ?? "—"}</td>
+                      <td>{company.country ?? "—"}</td>
+                      <td>{company.category ?? "—"}</td>
+                      <td>
+                        {primaryPhone ?? "—"}
+                        {phoneCount > 1 && (
+                          <span className="muted"> (+{phoneCount - 1})</span>
+                        )}
+                      </td>
+                      <td>
+                        {primaryEmail ?? "—"}
+                        {emailCount > 1 && (
+                          <span className="muted"> (+{emailCount - 1})</span>
+                        )}
+                      </td>
+                      <td>
+                        {emailCount === 0 && (
+                          <span
+                            className="badge badge-enrich"
+                            style={{ marginRight: "6px" }}
+                          >
+                            e-mail
+                          </span>
+                        )}
+                        {phoneCount === 0 && (
+                          <span className="badge badge-enrich">telefon</span>
+                        )}
+                        {emailCount > 0 && phoneCount > 0 && "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
+      </section>
+
+      <section
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <Link
+          href="/companies?view=enrich"
+          className="btn"
+        >
+          Wróć do firm
+        </Link>
+        <a
+          href="#"
+          className="btn"
+          style={{ marginLeft: "auto" }}
+        >
+          Do góry
+        </a>
       </section>
     </main>
   );

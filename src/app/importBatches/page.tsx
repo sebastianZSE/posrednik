@@ -18,7 +18,7 @@ type ImportBatchItem = {
 };
 
 function formatDate(value: string | null) {
-  if (!value) return "brak";
+  if (!value) return "—";
 
   const date = new Date(value);
 
@@ -30,52 +30,39 @@ function formatDate(value: string | null) {
 }
 
 function getBatchStatusLabel(status: string) {
-  if (status === "finished") return "finished";
-  if (status === "running") return "running";
-  if (status === "error") return "error";
-  if (status === "skipped_duplicate_file") return "skipped_duplicate_file";
+  if (status === "finished") return "zakończony";
+  if (status === "running") return "w trakcie";
+  if (status === "error") return "błąd";
+  if (status === "skipped_duplicate_file") return "pominięty (duplikat)";
   return status;
 }
 
-function getBatchStatusStyle(status: string) {
-  if (status === "finished") {
-    return {
-      padding: "6px 10px",
-      borderRadius: "999px",
-      border: "1px solid #ccc",
-      display: "inline-block",
-      fontWeight: 700,
-    } as const;
-  }
-
-  if (status === "running") {
-    return {
-      padding: "6px 10px",
-      borderRadius: "999px",
-      border: "1px solid #ccc",
-      display: "inline-block",
-      fontWeight: 700,
-    } as const;
-  }
-
-  if (status === "error") {
-    return {
-      padding: "6px 10px",
-      borderRadius: "999px",
-      border: "1px solid #ccc",
-      display: "inline-block",
-      fontWeight: 700,
-    } as const;
-  }
-
-  return {
-    padding: "6px 10px",
-    borderRadius: "999px",
-    border: "1px solid #ccc",
-    display: "inline-block",
-    fontWeight: 700,
-  } as const;
+function getBatchStatusBadgeClass(status: string) {
+  if (status === "finished") return "badge badge-ready";
+  if (status === "running") return "badge badge-enrich";
+  if (status === "error") return "badge badge-error";
+  if (status === "skipped_duplicate_file") return "badge badge-skip";
+  return "badge";
 }
+
+const statCardStyle = {
+  border: "1px solid #ddd",
+  borderRadius: "12px",
+  padding: "16px 20px",
+  background: "#fff",
+} as const;
+
+const statValueStyle = {
+  fontSize: "26px",
+  fontWeight: 700,
+  margin: "4px 0 0",
+} as const;
+
+const statLabelStyle = {
+  margin: 0,
+  color: "#666",
+  fontSize: "14px",
+} as const;
 
 export default async function ImportBatchesPage() {
   const { data, error } = await supabase
@@ -124,7 +111,7 @@ export default async function ImportBatchesPage() {
   );
 
   return (
-    <main style={{ padding: "40px", fontFamily: "Arial, sans-serif" }}>
+    <main style={{ padding: "40px" }}>
       <div
         style={{
           display: "flex",
@@ -134,200 +121,161 @@ export default async function ImportBatchesPage() {
           flexWrap: "wrap",
         }}
       >
-        <h1 style={{ margin: 0 }}>ImportBatches</h1>
+        <h1 style={{ margin: 0 }}>Importy</h1>
 
         <Link
           href="/companies"
-          style={{
-            padding: "10px 16px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            textDecoration: "none",
-            color: "inherit",
-            display: "inline-block",
-          }}
+          className="btn"
         >
-          Wróć do companies
+          Wróć do firm
         </Link>
       </div>
 
-      <section style={{ marginTop: "24px" }}>
-        <p>importBatches error: {error ? error.message : "brak"}</p>
-      </section>
+      {error && (
+        <section className="error-box">
+          <strong>Wystąpił błąd podczas pobierania danych:</strong>
+          <p style={{ margin: "6px 0 0" }}>{error.message}</p>
+        </section>
+      )}
 
       <section
         style={{
           marginTop: "24px",
           display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: "12px",
         }}
       >
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>batchesCount:</strong> {importBatches.length}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Partie importu</p>
+          <p style={statValueStyle}>{importBatches.length}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>finishedCount:</strong> {finishedCount}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Zakończone</p>
+          <p style={statValueStyle}>{finishedCount}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>runningCount:</strong> {runningCount}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>W trakcie</p>
+          <p style={statValueStyle}>{runningCount}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>errorCount:</strong> {errorCount}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Błędy partii</p>
+          <p style={statValueStyle}>{errorCount}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>skippedDuplicateFileCount:</strong>{" "}
-          {skippedDuplicateFileCount}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Pominięte (duplikat pliku)</p>
+          <p style={statValueStyle}>{skippedDuplicateFileCount}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>totalRows:</strong> {totalRows}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Wiersze łącznie</p>
+          <p style={statValueStyle}>{totalRows}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>totalInserted:</strong> {totalInserted}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Wstawione</p>
+          <p style={statValueStyle}>{totalInserted}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>totalDuplicates:</strong> {totalDuplicates}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Duplikaty</p>
+          <p style={statValueStyle}>{totalDuplicates}</p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "16px",
-          }}
-        >
-          <strong>totalErrors:</strong> {totalErrors}
+        <div style={statCardStyle}>
+          <p style={statLabelStyle}>Wiersze z błędami</p>
+          <p style={statValueStyle}>{totalErrors}</p>
         </div>
       </section>
 
       <section style={{ marginTop: "32px" }}>
-        <h2>BatchList</h2>
+        <h2>Lista partii importu</h2>
 
         {importBatches.length === 0 ? (
-          <p>Brak batchy importu.</p>
+          <p>Brak partii importu.</p>
         ) : (
-          <div style={{ display: "grid", gap: "16px" }}>
-            {importBatches.map((batch) => (
-              <article
-                key={batch.id}
-                style={{
-                  border: "1px solid #ddd",
-                  borderRadius: "12px",
-                  padding: "20px",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "12px",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <h3 style={{ margin: 0 }}>{batch.source_file_name}</h3>
-
-                  <span style={getBatchStatusStyle(batch.batch_status)}>
-                    {getBatchStatusLabel(batch.batch_status)}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: "12px" }}>
-                  <p>
-                    <strong>batchId:</strong> {batch.id}
-                  </p>
-                  <p>
-                    <strong>sourceName:</strong> {batch.source_name}
-                  </p>
-                  <p>
-                    <strong>sourceFileName:</strong> {batch.source_file_name}
-                  </p>
-                  <p>
-                    <strong>sourceFileHash:</strong> {batch.source_file_hash}
-                  </p>
-                  <p>
-                    <strong>rowsTotal:</strong> {batch.rows_total}
-                  </p>
-                  <p>
-                    <strong>rowsMapped:</strong> {batch.rows_mapped}
-                  </p>
-                  <p>
-                    <strong>rowsInserted:</strong> {batch.rows_inserted}
-                  </p>
-                  <p>
-                    <strong>rowsDuplicates:</strong> {batch.rows_duplicates}
-                  </p>
-                  <p>
-                    <strong>rowsErrors:</strong> {batch.rows_errors}
-                  </p>
-                  <p>
-                    <strong>startedAt:</strong> {formatDate(batch.started_at)}
-                  </p>
-                  <p>
-                    <strong>finishedAt:</strong> {formatDate(batch.finished_at)}
-                  </p>
-                  <p>
-                    <strong>notes:</strong> {batch.notes ?? "brak"}
-                  </p>
-                </div>
-              </article>
-            ))}
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Plik</th>
+                  <th>Status</th>
+                  <th>Wiersze</th>
+                  <th>Zmapowane</th>
+                  <th>Wstawione</th>
+                  <th>Duplikaty</th>
+                  <th>Błędy</th>
+                  <th>Rozpoczęto</th>
+                  <th>Zakończono</th>
+                  <th>Notatki</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importBatches.map((batch) => (
+                  <tr key={batch.id}>
+                    <td>
+                      <span
+                        style={{ fontWeight: 700 }}
+                        title={`id: ${batch.id} | hash: ${batch.source_file_hash}`}
+                      >
+                        {batch.source_file_name}
+                      </span>
+                      <div
+                        className="muted"
+                        style={{ fontSize: "13px", marginTop: "4px" }}
+                      >
+                        {batch.source_name}
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className={getBatchStatusBadgeClass(batch.batch_status)}
+                      >
+                        {getBatchStatusLabel(batch.batch_status)}
+                      </span>
+                    </td>
+                    <td>{batch.rows_total}</td>
+                    <td>{batch.rows_mapped}</td>
+                    <td>{batch.rows_inserted}</td>
+                    <td>{batch.rows_duplicates}</td>
+                    <td>{batch.rows_errors}</td>
+                    <td>{formatDate(batch.started_at)}</td>
+                    <td>{formatDate(batch.finished_at)}</td>
+                    <td>{batch.notes ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
+      </section>
+
+      <section
+        style={{
+          marginTop: "24px",
+          display: "flex",
+          gap: "12px",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <Link
+          href="/companies"
+          className="btn"
+        >
+          Wróć do firm
+        </Link>
+        <a
+          href="#"
+          className="btn"
+          style={{ marginLeft: "auto" }}
+        >
+          Do góry
+        </a>
       </section>
     </main>
   );
