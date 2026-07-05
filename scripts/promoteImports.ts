@@ -226,6 +226,7 @@ async function createCompany(params: {
   phone: string | null;
 }) {
   const status = calculateLeadStatus({
+    hasWebsite: Boolean(params.website?.trim()),
     hasEmail: Boolean(params.email),
     hasPhone: Boolean(params.phone),
   });

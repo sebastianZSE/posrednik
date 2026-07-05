@@ -27,6 +27,7 @@ async function main() {
       .from("companies")
       .select("id")
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
       .range(offset, offset + READ_BATCH_SIZE - 1);
 
     if (error) {
