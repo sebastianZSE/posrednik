@@ -13,7 +13,12 @@ export type ContactValidationMetadata = {
 
 export const CONTACT_VALIDATION_VERSION = "contact_validation_v2";
 
-const FREE_EMAIL_PROVIDERS = new Set([
+export function isFreeEmailDomain(email: string): boolean {
+  const domainPart = email.split("@")[1]?.trim().toLowerCase() ?? "";
+  return FREE_EMAIL_PROVIDERS.has(domainPart);
+}
+
+export const FREE_EMAIL_PROVIDERS = new Set([
   "gmail.com",
   "googlemail.com",
   "gmx.de",

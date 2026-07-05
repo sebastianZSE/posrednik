@@ -9,9 +9,11 @@ import {
 } from "../src/lib/core/contactNormalization";
 import { addContactIfMissing } from "../src/lib/core/contactStore";
 import { refreshCompanyStatusAndQuality } from "../src/lib/core/companyStatus";
+import { deobfuscateEmailText } from "../src/lib/core/emailDeobfuscation";
 import {
   validateNormalizedEmailContact,
   validatePhoneContact,
+  isFreeEmailDomain,
 } from "../src/lib/core/contactValidation";
 
 const phoneLabelHints = ["tel", "telefon", "phone", "mobil", "mobile", "handy"];
@@ -69,7 +71,11 @@ async function fetchHtml(url: string) {
       throw new Error(`Nieobslugiwany content-type: ${contentType}`);
     }
 
-    return await response.text();
+    return {
+      html: await response.text(),
+      // finalny adres po przekierowaniach — kluczowy dla porównania domen
+      finalUrl: response.url || url,
+    };
   } finally {
     clearTimeout(timeout);
   }
@@ -113,14 +119,21 @@ function extractEmailsFromLines(params: { lines: string[]; pageUrl: string }) {
   const emailSet = new Set<string>();
 
   for (const line of params.lines) {
+    // najpierw odkoduj zapisy anty-spamowe: info (at) firma (punkt) de
+    const decodedLine = deobfuscateEmailText(line);
+
     const matches =
-      line.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}\b/gi) ?? [];
+      decodedLine.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,24}\b/gi) ?? [];
 
     for (const match of matches) {
       const email = normalizeEmail(match);
 
       if (!email) continue;
-      if (!isCompanyDomainEmail(email, params.pageUrl)) continue;
+
+      // domena firmy -> validLike; znany freemail -> zapis jako "risky"
+      if (!isCompanyDomainEmail(email, params.pageUrl) && !isFreeEmailDomain(email)) {
+        continue;
+      }
 
       emailSet.add(email);
     }
@@ -183,7 +196,10 @@ function extractContactDataFromHtml(params: {
 
     if (href.startsWith("mailto:")) {
       const email = normalizeEmail(href);
-      if (email && isCompanyDomainEmail(email, params.pageUrl)) {
+      if (
+        email &&
+        (isCompanyDomainEmail(email, params.pageUrl) || isFreeEmailDomain(email))
+      ) {
         emailSet.add(email);
       }
       return;
@@ -282,11 +298,11 @@ async function enrichCompanyWebsite(company: CompanyRow) {
     throw new Error("Brak website");
   }
 
-  const homepageHtml = await fetchHtml(company.website);
+  const homepage = await fetchHtml(company.website);
 
   const homepageData = extractContactDataFromHtml({
-    html: homepageHtml,
-    pageUrl: company.website,
+    html: homepage.html,
+    pageUrl: homepage.finalUrl,
     country: company.country ?? "DE",
   });
 
@@ -300,11 +316,11 @@ async function enrichCompanyWebsite(company: CompanyRow) {
 
   for (const url of urlsToVisit) {
     try {
-      const html = await fetchHtml(url);
+      const page = await fetchHtml(url);
 
       const pageData = extractContactDataFromHtml({
-        html,
-        pageUrl: url,
+        html: page.html,
+        pageUrl: page.finalUrl,
         country: company.country ?? "DE",
       });
 
@@ -320,7 +336,7 @@ async function enrichCompanyWebsite(company: CompanyRow) {
 
   let addedContacts = 0;
   const companyDomainForValidation =
-    company.domain ?? getHostWithoutWww(company.website);
+    company.domain ?? getHostWithoutWww(homepage.finalUrl);
   const companyCountryForValidation = company.country ?? "DE";
 
   for (const email of [...emailSet].slice(0, 5)) {
