@@ -18,6 +18,22 @@ import {
 
 const phoneLabelHints = ["tel", "telefon", "phone", "mobil", "mobile", "handy"];
 
+// --limit=N pozwala przetworzyć więcej niż jedną porcję (domyślnie: jedna
+// porcja 25 firm, dokładnie jak dotychczas)
+function getRunLimit() {
+  const arg = process.argv.find((value) => value.startsWith("--limit="));
+  if (!arg) return deRules.maxCompaniesPerRun;
+
+  const parsed = Number.parseInt(arg.split("=")[1] ?? "", 10);
+  if (Number.isNaN(parsed) || parsed < 1) return deRules.maxCompaniesPerRun;
+
+  return parsed;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type CompanyRow = {
   id: string;
   company_name: string | null;
@@ -401,7 +417,7 @@ async function enrichCompanyWebsite(company: CompanyRow) {
   };
 }
 
-async function main() {
+async function fetchNextBatch(batchSize: number) {
   const { data, error } = await supabase
     .from("companies")
     .select(
@@ -413,27 +429,42 @@ async function main() {
     .in("website_enrich_status", ["new", "error"])
     .lt("website_enrich_attempts", deRules.maxWebsiteEnrichAttempts)
     .order("created_at", { ascending: true })
-    .limit(deRules.maxCompaniesPerRun);
+    .limit(batchSize);
 
   if (error) {
     throw new Error(`Blad przy pobieraniu firm do enrich: ${error.message}`);
   }
 
-  const companies = (data ?? []) as CompanyRow[];
+  return (data ?? []) as CompanyRow[];
+}
 
-  console.log(`Znaleziono firm do website enrichment: ${companies.length}`);
+async function main() {
+  const runLimit = getRunLimit();
+  console.log(`Limit firm w tym uruchomieniu: ${runLimit}`);
 
-  if (companies.length === 0) {
-    console.log("Brak firm do website enrichment.");
-    return;
-  }
-
+  let processedTotal = 0;
   let successCount = 0;
   let noContactFoundCount = 0;
   let errorCount = 0;
   let addedContactsCount = 0;
 
-  for (const company of companies) {
+  while (processedTotal < runLimit) {
+    const batchSize = Math.min(
+      deRules.maxCompaniesPerRun,
+      runLimit - processedTotal,
+    );
+    const companies = await fetchNextBatch(batchSize);
+
+    if (companies.length === 0) {
+      console.log("Brak kolejnych firm do website enrichment.");
+      break;
+    }
+
+    console.log(
+      `Porcja: ${companies.length} firm (przetworzono dotad: ${processedTotal})`,
+    );
+
+    for (const company of companies) {
     try {
       const result = await enrichCompanyWebsite(company);
       const nextAttempts = (company.website_enrich_attempts ?? 0) + 1;
@@ -482,9 +513,14 @@ async function main() {
         `[ERR] ${company.company_name ?? company.id}: ${errorMessage}`,
       );
     }
+
+      processedTotal += 1;
+      await sleep(300);
+    }
   }
 
   console.log("Website enrichment DE zakonczony.");
+  console.log(`processedTotal=${processedTotal}`);
   console.log(`successCount=${successCount}`);
   console.log(`noContactFoundCount=${noContactFoundCount}`);
   console.log(`errorCount=${errorCount}`);

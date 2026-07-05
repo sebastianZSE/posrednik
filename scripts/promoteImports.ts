@@ -274,7 +274,7 @@ async function createCompany(params: {
       address: params.address,
       city: params.city,
       postal_code: params.postalCode,
-      country: params.country,
+      country: params.country ?? 'DE',
       category: params.category,
       status,
       quality_score: qualityScore,
