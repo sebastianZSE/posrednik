@@ -57,6 +57,18 @@ function getSafeSearch(value: string) {
   return value.replace(/[,()"'%\\]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// Ta sama normalizacja, którą pipeline zapisuje w kolumnie normalized_name
+function getNormalizedSearch(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function groupContactsByCompany(contacts: ContactItem[]) {
   const contactMap = new Map<string, ContactItem[]>();
 
@@ -262,6 +274,7 @@ export default async function CompaniesPage({
   });
 
   const safeSearch = getSafeSearch(search);
+  const normalizedSearch = getNormalizedSearch(search);
 
   const rangeFrom = (page - 1) * PAGE_SIZE;
   const rangeTo = rangeFrom + PAGE_SIZE - 1;
@@ -282,9 +295,16 @@ export default async function CompaniesPage({
   }
 
   if (safeSearch) {
-    companiesQuery = companiesQuery.or(
-      `company_name.ilike.%${safeSearch}%,legal_name.ilike.%${safeSearch}%`,
-    );
+    const searchConditions = [
+      `company_name.ilike.%${safeSearch}%`,
+      `legal_name.ilike.%${safeSearch}%`,
+    ];
+
+    if (normalizedSearch) {
+      searchConditions.push(`normalized_name.ilike.%${normalizedSearch}%`);
+    }
+
+    companiesQuery = companiesQuery.or(searchConditions.join(","));
   }
 
   const {
