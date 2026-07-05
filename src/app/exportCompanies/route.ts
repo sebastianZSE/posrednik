@@ -16,7 +16,8 @@
 // i zwraca go jako plik do pobrania
 
 
-import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin";
+import { supabaseAdmin as supabase } from "@/lib/core/supabaseAdmin"
+import { fetchAllRows } from "@/lib/core/fetchAllRows";
 
 type CompanyItem = {
   id: string
@@ -159,12 +160,16 @@ export async function GET(request: Request) {
 
   const normalizedSearch = normalizeSearchValue(search)
 
-  const { data: companiesData, error: companiesError } = await supabase
-    .from('companies')
-    .select(
-      'id, company_name, legal_name, domain, website, city, country, category, status, quality_score, created_at'
+  const { rows: companiesData, error: companiesError } =
+    await fetchAllRows<CompanyItem>(() =>
+      supabase
+        .from('companies')
+        .select(
+          'id, company_name, legal_name, domain, website, city, country, category, status, quality_score, created_at'
+        )
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
     )
-    .order('created_at', { ascending: false })
 
   if (companiesError) {
     return new Response(`Blad companies: ${companiesError.message}`, {
@@ -172,13 +177,17 @@ export async function GET(request: Request) {
     })
   }
 
-  const { data: contactsData, error: contactsError } = await supabase
-    .from('company_contacts')
-    .select(
-      'id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at'
+  const { rows: contactsData, error: contactsError } =
+    await fetchAllRows<ContactItem>(() =>
+      supabase
+        .from('company_contacts')
+        .select(
+          'id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at'
+        )
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
     )
-    .order('is_primary', { ascending: false })
-    .order('created_at', { ascending: false })
 
   if (contactsError) {
     return new Response(`Blad contacts: ${contactsError.message}`, {
@@ -186,8 +195,8 @@ export async function GET(request: Request) {
     })
   }
 
-  const allCompanies = (companiesData ?? []) as CompanyItem[]
-  const allContacts = (contactsData ?? []) as ContactItem[]
+  const allCompanies = companiesData
+  const allContacts = contactsData
   const contactMap = groupContactsByCompany(allContacts)
 
   const filteredCompanies = allCompanies.filter((company) => {

@@ -132,16 +132,20 @@ export default async function EnrichQueuePage({
     .eq("status", "enrich")
     .order("created_at", { ascending: false });
 
+  const enrichCompanies = (companiesData ?? []) as CompanyItem[];
+
+  // Kontakty tylko firm ze statusem enrich — filtr przez złączenie w bazie,
+  // bez przekazywania listy identyfikatorów w adresie URL.
   const { data: contactsData, error: contactsError } = await supabase
     .from("company_contacts")
     .select(
-      "id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at",
+      "id, company_id, contact_type, contact_value, normalized_value, is_primary, is_verified, source, created_at, companies!inner(status)",
     )
+    .eq("companies.status", "enrich")
     .order("is_primary", { ascending: false })
     .order("created_at", { ascending: false });
 
-  const enrichCompanies = (companiesData ?? []) as CompanyItem[];
-  const allContacts = (contactsData ?? []) as ContactItem[];
+  const allContacts = (contactsData ?? []) as unknown as ContactItem[];
   const contactMap = groupContactsByCompany(allContacts);
 
   const availableCountries = getUniqueValues(
